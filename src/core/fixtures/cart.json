@@ -1,0 +1,37 @@
+{
+  "id": "gid://shopify/Cart/c1-abc123",
+  "checkoutUrl": "https://example-shop.myshopify.com/cart/c/c1-abc123",
+  "totalQuantity": 3,
+  "cost": {
+    "subtotalAmount": { "amount": "46.00", "currencyCode": "GBP" },
+    "totalAmount": { "amount": "46.00", "currencyCode": "GBP" }
+  },
+  "lines": {
+    "nodes": [
+      {
+        "id": "gid://shopify/CartLine/line-1",
+        "quantity": 2,
+        "cost": { "totalAmount": { "amount": "36.00", "currencyCode": "GBP" } },
+        "merchandise": {
+          "id": "gid://shopify/ProductVariant/40993523892280",
+          "title": "A3 print",
+          "price": { "amount": "18.00", "currencyCode": "GBP" },
+          "product": { "title": "Harbour at dusk", "handle": "harbour-at-dusk" },
+          "image": { "url": "https://cdn.shopify.com/harbour-at-dusk.jpg", "altText": "Harbour at dusk" }
+        }
+      },
+      {
+        "id": "gid://shopify/CartLine/line-2",
+        "quantity": 1,
+        "cost": { "totalAmount": { "amount": "10.00", "currencyCode": "GBP" } },
+        "merchandise": {
+          "id": "gid://shopify/ProductVariant/40993523925048",
+          "title": "Default Title",
+          "price": { "amount": "10.00", "currencyCode": "GBP" },
+          "product": { "title": "Field guide", "handle": "field-guide" },
+          "image": null
+        }
+      }
+    ]
+  }
+}
