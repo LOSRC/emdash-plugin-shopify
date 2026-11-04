@@ -14,10 +14,12 @@ export interface StoredRun {
   at: string;
   report?: SyncReport;
   error?: string;
+  /** Set when no run was made because another was still going. Such an outcome is never stored as the last run. */
+  busy?: true;
 }
 
 export interface AdminDeps {
-  /** Run a sync. Resolves with the outcome even when the run was refused; it does not reject. */
+  /** Run a sync. Resolves with the outcome even when the run was refused or another is running; it does not reject. */
   sync(): Promise<StoredRun>;
   lastRun(): Promise<StoredRun | null>;
   saveRun(run: StoredRun): Promise<void>;
@@ -43,6 +45,10 @@ export async function handleAdminInteraction(input: unknown, deps: AdminDeps): P
 
   if (interaction.type === 'block_action' && interaction.action_id === SYNC_ACTION) {
     const run = await deps.sync();
+    // Another run holds the lock: say so, and keep showing the last real run.
+    if (run.busy) {
+      return { blocks: renderPage(await deps.lastRun()), toast: { message: run.error ?? 'A sync is already running.', type: 'info' } };
+    }
     await deps.saveRun(run);
     return { blocks: renderPage(run), toast: toastFor(run) };
   }
