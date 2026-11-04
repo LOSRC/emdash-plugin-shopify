@@ -7,6 +7,8 @@ import {
   CART_PATH,
   CART_ERROR_MESSAGE,
   CART_REJECTED_MESSAGE,
+  CART_UPDATE_REJECTED_MESSAGE,
+  handleCart,
 } from './cart-runtime';
 import { createFakeCartClient } from './testing';
 import type { CartSession, StoredCart } from './cart-session';
@@ -385,5 +387,220 @@ describe('no cart id in any URL the handlers produce', () => {
     }
     // And the responses really did exercise redirects, not just empty bodies.
     expect(responses.filter((res) => res.headers.has('location')).length).toBeGreaterThan(3);
+  });
+});
+
+/** A fetch-style request that also asks for the full cart view (the drawer's contract). */
+function viewRequest(fields: Record<string, string>): Request {
+  const fd = new FormData();
+  for (const [key, value] of Object.entries(fields)) fd.append(key, value);
+  return new Request('https://example.com/api/cart', {
+    method: 'POST',
+    body: fd,
+    headers: { accept: 'application/json', 'x-requested-with': 'fetch', 'x-cart-view': '1' },
+  });
+}
+
+describe('handleAdd - cart view on request', () => {
+  it('returns the CartView instead of the snapshot when the caller opts in with X-Cart-View', async () => {
+    const client = createFakeCartClient({ prices: { [VARIANT]: '18.00' } });
+    const { session } = memorySession();
+
+    const res = await handleAdd(viewRequest({ merchandiseId: VARIANT, quantity: '2' }), client, session);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe('private, no-store');
+    const view = await res.json();
+    expect(view).toMatchObject({
+      lineCount: 2,
+      subtotal: { amount: '36.00', currencyCode: 'GBP' },
+      lines: [{ quantity: 2, unitPrice: { amount: '18.00', currencyCode: 'GBP' }, lineTotal: { amount: '36.00' } }],
+    });
+    expect(view.checkoutUrl).toMatch(/^https:\/\//);
+    expect(view.lines[0].id).toMatch(/^gid:\/\/shopify\/CartLine\//);
+  });
+});
+
+describe('handleUpdate / handleRemove - JSON', () => {
+  /** A cart holding two lines (2 x VARIANT at 18.00, 1 x VARIANT_2 at 5.50) and its session. */
+  async function twoLineCart() {
+    const client = createFakeCartClient({ prices: { [VARIANT]: '18.00', [VARIANT_2]: '5.50' } });
+    const memory = memorySession();
+    await handleAdd(postForm({ merchandiseId: VARIANT, quantity: '2' }), client, memory.session);
+    await handleAdd(postForm({ merchandiseId: VARIANT_2 }), client, memory.session);
+    const [first, second] = onlyCart(client).lines.nodes;
+    return { client, ...memory, first: first!, second: second! };
+  }
+
+  it('update returns the refreshed CartView, private, and writes the snapshot', async () => {
+    const { client, session, state, first } = await twoLineCart();
+
+    const res = await handleUpdate(viewRequest({ lineId: first.id, quantity: '3' }), client, session);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe('private, no-store');
+    const view = await res.json();
+    expect(view.lineCount).toBe(4);
+    expect(view.subtotal).toEqual({ amount: '59.50', currencyCode: 'GBP' });
+    expect(view.lines.map((line: { quantity: number }) => line.quantity)).toEqual([3, 1]);
+    expect(state.current!.snapshot.lineCount).toBe(4);
+  });
+
+  it('remove returns the CartView without the removed line', async () => {
+    const { client, session, state, first, second } = await twoLineCart();
+
+    const res = await handleRemove(viewRequest({ lineId: first.id }), client, session);
+
+    const view = await res.json();
+    expect(res.status).toBe(200);
+    expect(view.lines.map((line: { id: string }) => line.id)).toEqual([second.id]);
+    expect(view.subtotal.amount).toBe('5.50');
+    expect(state.current!.snapshot.lineCount).toBe(1);
+  });
+
+  it('answers JSON on Accept alone, as the add route does', async () => {
+    const { client, session, first } = await twoLineCart();
+    const res = await handleRemove(postForm({ lineId: first.id }, { json: true }), client, session);
+    expect(res.status).toBe(200);
+    expect((await res.json()).lines).toHaveLength(1);
+  });
+
+  it('keeps the plain-form 303 when JSON was not requested', async () => {
+    const { client, session, first } = await twoLineCart();
+    const res = await handleUpdate(postForm({ lineId: first.id, quantity: '3' }), client, session);
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toBe(CART_PATH);
+  });
+
+  it('rejects invalid input as 400 JSON without touching Shopify or the session', async () => {
+    const { client, session, state, first } = await twoLineCart();
+    const writes = state.writes;
+
+    const badQuantity = await handleUpdate(viewRequest({ lineId: first.id, quantity: '0' }), client, session);
+    const badLine = await handleRemove(viewRequest({ lineId: 'not-a-gid' }), client, session);
+
+    expect(badQuantity.status).toBe(400);
+    expect(await badQuantity.json()).toEqual({ error: expect.stringContaining('quantity') });
+    expect(badLine.status).toBe(400);
+    expect(await badLine.json()).toEqual({ error: expect.stringContaining('CartLine') });
+    expect(state.writes).toBe(writes);
+    expect(onlyCart(client).totalQuantity).toBe(3);
+  });
+
+  it('degrades to a 502 JSON error when Shopify fails, leaving the snapshot alone', async () => {
+    const { client, session, state, first } = await twoLineCart();
+    const before = state.current;
+    client.failNextWith(new Error('Storefront API HTTP 503'));
+
+    const res = await handleUpdate(viewRequest({ lineId: first.id, quantity: '3' }), client, session);
+
+    expect(res.status).toBe(502);
+    expect(await res.json()).toEqual({ error: CART_ERROR_MESSAGE });
+    expect(state.current).toBe(before);
+  });
+
+  it('answers an empty view when there is no stored cart', async () => {
+    const client = createFakeCartClient();
+    const { session, state } = memorySession();
+
+    const res = await handleRemove(viewRequest({ lineId: 'gid://shopify/CartLine/none' }), client, session);
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ lineCount: 0, lines: [], checkoutUrl: '' });
+    expect(state.writes).toBe(0);
+  });
+
+  it('answers an empty view when Shopify no longer resolves the stored cart', async () => {
+    const client = createFakeCartClient();
+    const stale: StoredCart = {
+      id: 'gid://shopify/Cart/expired-xyz',
+      snapshot: { lineCount: 5, subtotal: '100.00', currency: 'GBP' },
+    };
+    const { session } = memorySession(stale);
+
+    const res = await handleUpdate(viewRequest({ lineId: 'gid://shopify/CartLine/x', quantity: '2' }), client, session);
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ lineCount: 0, lines: [], subtotal: { currencyCode: 'GBP' } });
+  });
+
+  it('reports a Shopify refusal as 422 JSON', async () => {
+    const { client, session, state, first } = await twoLineCart();
+    const before = state.current;
+    client.rejectMutationsWith('Not available');
+
+    const res = await handleUpdate(viewRequest({ lineId: first.id, quantity: '9' }), client, session);
+
+    expect(res.status).toBe(422);
+    expect(await res.json()).toEqual({ error: CART_UPDATE_REJECTED_MESSAGE });
+    expect(state.current).toBe(before);
+  });
+});
+
+describe('handleCart (GET the cart view)', () => {
+  it('returns the stored cart as a private CartView', async () => {
+    const client = createFakeCartClient({ prices: { [VARIANT]: '18.00' } });
+    const { session } = memorySession();
+    await handleAdd(postForm({ merchandiseId: VARIANT, quantity: '2' }), client, session);
+
+    const res = await handleCart(client, session);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe('private, no-store');
+    expect(await res.json()).toMatchObject({ lineCount: 2, subtotal: { amount: '36.00' }, lines: [{ quantity: 2 }] });
+  });
+
+  it('returns an empty view when there is no cart, and when Shopify no longer resolves it', async () => {
+    const client = createFakeCartClient();
+    expect(await (await handleCart(client, memorySession().session)).json()).toMatchObject({ lineCount: 0, lines: [] });
+
+    const stale: StoredCart = {
+      id: 'gid://shopify/Cart/expired-xyz',
+      snapshot: { lineCount: 5, subtotal: '100.00', currency: 'GBP' },
+    };
+    const res = await handleCart(client, memorySession(stale).session);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ lineCount: 0, lines: [] });
+  });
+
+  it('degrades to a 502 JSON error when Shopify fails', async () => {
+    const client = createFakeCartClient();
+    const { session } = memorySession({
+      id: 'gid://shopify/Cart/live',
+      snapshot: { lineCount: 1, subtotal: '10.00', currency: 'GBP' },
+    });
+    client.failNextWith(new Error('boom'));
+
+    const res = await handleCart(client, session);
+
+    expect(res.status).toBe(502);
+    expect(await res.json()).toEqual({ error: CART_ERROR_MESSAGE });
+  });
+});
+
+describe('handleSummary - caching', () => {
+  it('is private and uncacheable, since the count element exists because pages are cached and shared', async () => {
+    const res = await handleSummary(memorySession().session);
+    expect(res.headers.get('cache-control')).toBe('private, no-store');
+  });
+});
+
+describe('the cart id stays out of the cart view responses', () => {
+  it('has neither the cart GID nor its token in a view body, though checkoutUrl is there', async () => {
+    const client = createFakeCartClient();
+    const { session, state } = memorySession();
+    const responses = [
+      await handleAdd(viewRequest({ merchandiseId: VARIANT }), client, session),
+      await handleCart(client, session),
+    ];
+    const lineId = onlyCart(client).lines.nodes[0]!.id;
+    responses.push(await handleUpdate(viewRequest({ lineId, quantity: '2' }), client, session));
+    responses.push(await handleRemove(viewRequest({ lineId }), client, session));
+    for (const res of responses) {
+      const body = await res.text();
+      expect(body).not.toContain('gid://shopify/Cart/');
+      expect(res.headers.get('location')).toBeNull();
+    }
+    expect(state.current!.id).toContain('Cart');
   });
 });

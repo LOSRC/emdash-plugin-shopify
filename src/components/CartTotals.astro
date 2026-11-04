@@ -1,0 +1,44 @@
+---
+import { formatMoney } from '@losrc/emdash-plugin-shopify/core';
+import type { CartView } from '@losrc/emdash-plugin-shopify/core';
+
+/** The subtotal, the free-shipping line, Checkout and the way back to the shop. */
+interface Props {
+  cart: CartView;
+  /** The free-shipping line. */
+  shippingNote?: string;
+  /** Where "Continue shopping" goes. */
+  continueHref?: string;
+  class?: string;
+}
+
+const { cart, shippingNote = 'Free shipping (UK)', continueHref = '/', class: className = '' } = Astro.props;
+---
+
+<section aria-labelledby="cart-summary-title" class:list={['space-y-4', className]}>
+  <h2 id="cart-summary-title" class="sr-only">Order summary</h2>
+  <dl class="space-y-2">
+    <div class="flex justify-between gap-4 text-lg font-bold">
+      <dt>Subtotal</dt>
+      <dd>{formatMoney(cart.subtotal.amount, cart.subtotal.currencyCode)}</dd>
+    </div>
+    <div class="flex justify-between gap-4">
+      <dt>Shipping</dt>
+      <dd>{shippingNote}</dd>
+    </div>
+  </dl>
+  <div class="space-y-4">
+    <a
+      href={cart.checkoutUrl}
+      class="block bg-stone-900 px-6 py-3 text-center font-bold tracking-wide text-white uppercase hover:bg-stone-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-900"
+    >
+      Checkout
+    </a>
+    <a
+      href={continueHref}
+      class="block border-2 border-stone-900 px-6 py-3 text-center font-bold tracking-wide uppercase hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-900"
+    >
+      Continue shopping
+    </a>
+  </div>
+</section>

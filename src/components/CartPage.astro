@@ -1,0 +1,118 @@
+---
+import { CART_ERROR_MESSAGE, formatMoney } from '@losrc/emdash-plugin-shopify/core';
+import type { CartView } from '@losrc/emdash-plugin-shopify/core';
+import CartEmpty from './CartEmpty.astro';
+import CartTotals from './CartTotals.astro';
+
+/**
+ * The /cart/ page body: every line with its quantity form and remove button, then the totals. All
+ * plain form posts, so it works with no JavaScript. The site's page reads the session and the cart
+ * and hands the result in:
+ *
+ * ```astro
+ * const stored = await astroCartSession(Astro.session).read();
+ * let cart = null, loadFailed = false;
+ * try { const raw = stored && await client.getCart(stored.id); cart = raw ? toCartView(raw) : null; }
+ * catch { loadFailed = true; }
+ * <CartPage cart={cart} loadFailed={loadFailed} actionFailed={Astro.url.searchParams.has('error')} />
+ * ```
+ */
+interface Props {
+  /** The cart, or `null` when there is none (or Shopify no longer has it). */
+  cart: CartView | null;
+  /** Shopify could not be reached to read the cart. Wins over `actionFailed`. */
+  loadFailed?: boolean;
+  /** A cart action failed: the handlers redirect here with `?error=add|update|remove`. */
+  actionFailed?: boolean;
+  /** Where the site mounts the cart routes. */
+  apiBase?: string;
+  /** Product page path for a line's title; `{handle}` is replaced. */
+  productPath?: string;
+  /** The free-shipping line. */
+  shippingNote?: string;
+  /** Where "Continue shopping" and "Start shopping" go. */
+  continueHref?: string;
+  class?: string;
+}
+
+const {
+  cart,
+  loadFailed = false,
+  actionFailed = false,
+  apiBase = '/api/cart',
+  productPath = '/product/{handle}',
+  shippingNote = 'Free shipping (UK)',
+  continueHref = '/',
+  class: className = '',
+} = Astro.props;
+
+const base = apiBase.replace(/\/$/, '');
+const lines = cart?.lines ?? [];
+const error = loadFailed
+  ? CART_ERROR_MESSAGE
+  : actionFailed
+    ? "Sorry, that change didn't go through. Please check your cart and try again."
+    : '';
+const href = (handle: string) => productPath.replace('{handle}', encodeURIComponent(handle));
+---
+
+<div class:list={['space-y-8', className]}>
+  {error && <p role="alert" class="border border-red-300 bg-red-50 px-4 py-3 text-red-900">{error}</p>}
+
+  {
+    cart && lines.length > 0 ? (
+      <div class="grid gap-8 lg:grid-cols-3 lg:items-start">
+        <ul class="divide-y divide-stone-300 border-y-2 border-stone-900 lg:col-span-2">
+          {lines.map((line) => (
+            <li class="grid grid-cols-[4rem_1fr] gap-x-4 gap-y-3 py-4 sm:grid-cols-[5rem_1fr_auto]">
+              {line.image ? (
+                <img src={line.image.url} alt={line.image.altText ?? ''} width="80" height="80" loading="lazy" class="size-16 object-cover sm:size-20" />
+              ) : (
+                <div class="size-16 bg-stone-200 sm:size-20" aria-hidden="true" />
+              )}
+              <div class="min-w-0 space-y-1">
+                <a href={href(line.productHandle)} class="font-bold underline hover:no-underline">{line.productTitle}</a>
+                {line.variantTitle !== 'Default Title' && <p class="text-sm text-stone-600">{line.variantTitle}</p>}
+                <p class="text-sm">{formatMoney(line.unitPrice.amount, line.unitPrice.currencyCode)} each</p>
+              </div>
+              <div class="col-span-2 flex flex-wrap items-end justify-between gap-x-6 gap-y-3 sm:col-span-1 sm:flex-col sm:items-end">
+                <p class="font-bold tabular-nums">
+                  <span class="sr-only">Line total </span>{formatMoney(line.lineTotal.amount, line.lineTotal.currencyCode)}
+                </p>
+                <form action={`${base}/update`} method="post" class="flex items-end gap-2">
+                  <input type="hidden" name="lineId" value={line.id} />
+                  <label class="text-sm">
+                    <span class="mb-1 block font-bold">Quantity<span class="sr-only"> of {line.productTitle}</span></span>
+                    <input
+                      type="number"
+                      name="quantity"
+                      value={line.quantity}
+                      min="1"
+                      max="100"
+                      inputmode="numeric"
+                      class="w-20 border-2 border-stone-900 px-2 py-1.5"
+                    />
+                  </label>
+                  <button type="submit" class="border-2 border-stone-900 px-3 py-1.5 text-sm font-bold hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-900">
+                    Update<span class="sr-only"> {line.productTitle}</span>
+                  </button>
+                </form>
+                <form action={`${base}/remove`} method="post">
+                  <input type="hidden" name="lineId" value={line.id} />
+                  <button type="submit" class="text-sm underline hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-900">
+                    Remove<span class="sr-only"> {line.productTitle}</span>
+                  </button>
+                </form>
+              </div>
+            </li>
+          ))}
+        </ul>
+        <CartTotals cart={cart} shippingNote={shippingNote} continueHref={continueHref} />
+      </div>
+    ) : loadFailed ? (
+      <a href={continueHref} class="inline-block underline hover:no-underline">Continue shopping</a>
+    ) : (
+      <CartEmpty href={continueHref} />
+    )
+  }
+</div>

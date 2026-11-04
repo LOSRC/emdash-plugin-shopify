@@ -5,6 +5,8 @@ export default defineConfig({
     index: 'src/index.ts',
     'core/index': 'src/core/index.ts',
     'core/testing': 'src/core/testing.ts',
+    'elements/cart-drawer': 'src/elements/cart-drawer.ts',
+    'elements/cart-count': 'src/elements/cart-count.ts',
   },
   format: 'esm',
   platform: 'neutral',

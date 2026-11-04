@@ -1,6 +1,6 @@
 {
   "name": "@losrc/emdash-plugin-shopify",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Shopify for Astro and EmDash: a Worker-owned cart that works without JavaScript, shop-data reading, and a product-sync admin page",
   "license": "MIT",
   "type": "module",
@@ -31,12 +31,19 @@
       "types": "./dist/core/testing.d.ts",
       "default": "./dist/core/testing.js"
     },
+    "./elements/*": {
+      "types": "./dist/elements/*.d.ts",
+      "default": "./dist/elements/*.js"
+    },
+    "./components/*": "./src/components/*",
     "./package.json": "./package.json"
   },
   "files": [
     "dist",
+    "src/components",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "CHANGELOG.md"
   ],
   "publishConfig": {
     "access": "public"

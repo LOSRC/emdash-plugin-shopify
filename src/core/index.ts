@@ -20,6 +20,7 @@ export {
   handleUpdate,
   handleRemove,
   handleSummary,
+  handleCart,
 } from './cart-runtime';
 export { wantsJson, jsonResponse } from './negotiation';
 export { formatMoney, formatPriceRange } from './money';

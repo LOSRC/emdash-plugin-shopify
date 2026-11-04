@@ -17,6 +17,7 @@ describe('the /core public API', () => {
         'formatMoney',
         'formatPriceRange',
         'handleAdd',
+        'handleCart',
         'handleRemove',
         'handleSummary',
         'handleUpdate',
