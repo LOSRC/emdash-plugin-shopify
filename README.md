@@ -281,6 +281,10 @@ Shop data (price, images, availability, the handle) is not stored on the entry; 
 
 The report is `{ created, flagged, unchanged, warnings }`. The page shows the last run when it opens.
 
+### Trashed entries
+
+EmDash 1.3.1's `ctx.content.list` leaves out trashed entries, and the plugin has no other way to find them: `list` takes no option to include them, and the only trash-aware call, `getTrashedVersioned(collection, id)`, needs an entry id the plugin does not have and the `content:restore` capability (the power to restore content, which a sync should not hold). So Sync cannot tell that a product's entry is in the trash, and it makes a new draft for that product. If you trash a product's entry on purpose, either restore it, delete it for good (the new draft is then the only entry), or unpublish the product in Shopify. If you find a new draft for a product you had trashed, delete the draft and restore the original.
+
 ### Refreshing the product picker
 
 A product grid block with a `multiSelect` of products needs its option list to contain the new products' slugs. EmDash's plugin context has no block-type API (`ctx.schema` reads collections only), so set `productOptions: { blockType, field }` and the plugin reaches the block type registry in-process, through `getDb` from `emdash/runtime`, and adds the missing slugs. It only adds options (a compatible change, so no new block type version), and it writes with the fingerprint it read, so a concurrent edit makes it fail with a warning rather than overwrite. This is a schema write made under a `content:create` route, which is why it is off unless you set the option. Without it, run the site's own script after Sync (as `testimonials:sync` does for Creative Care), or pass `refreshProductOptions` in the hooks below.

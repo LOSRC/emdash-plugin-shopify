@@ -1,5 +1,6 @@
 import { SHOP_DATA_CACHE_TAG } from '../core/cache-tag';
 import type { ShopifyProductsClient } from '../core/client';
+import { productIdOf } from '../core/shop-data';
 import type { PurgeTags } from '../core/purge';
 import type { ContentStore, FlaggedEntry, LinkedEntry, RefreshProductOptions, SyncReport } from './types';
 
@@ -16,14 +17,6 @@ export interface SyncDeps {
 /** A sync run was refused because Shopify's answer cannot be trusted. Nothing was written or purged. */
 export class SyncRefusedError extends Error {
   override readonly name = 'SyncRefusedError';
-}
-
-const PRODUCT_GID = /^gid:\/\/shopify\/Product\/(\d+)$/;
-
-/** The numeric form of a stored Shopify product id (a stored `gid://shopify/Product/N` becomes `N`). */
-export function normaliseShopifyId(id: string): string {
-  const trimmed = id.trim();
-  return PRODUCT_GID.exec(trimmed)?.[1] ?? trimmed;
 }
 
 function message(error: unknown): string {
@@ -55,7 +48,9 @@ export async function runSync(deps: SyncDeps): Promise<SyncReport> {
 
   const entriesById = new Map<string, LinkedEntry[]>();
   for (const entry of linked) {
-    const id = normaliseShopifyId(entry.shopifyId);
+    // A stored id is numeric or a product GID; anything else stays as written (trimmed) and so is flagged.
+    const stored = entry.shopifyId.trim();
+    const id = productIdOf(stored) ?? stored;
     entriesById.set(id, [...(entriesById.get(id) ?? []), entry]);
   }
 

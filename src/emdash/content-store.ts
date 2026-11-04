@@ -37,6 +37,9 @@ export interface ContentApi {
   create?(collection: string, data: Record<string, unknown>): Promise<ContentApiItem>;
 }
 
+/** Said when `ctx.content.create` is absent: the plugin lacks the capability. */
+export const CONTENT_WRITE_REQUIRED = 'The plugin cannot write content: it needs the content:write capability.';
+
 const PAGE_SIZE = 100; // the most `ctx.content.list` returns
 const MAX_PAGES = 1000;
 
@@ -81,7 +84,7 @@ export function createEmdashContentStore(
 
     async createDraft({ shopifyId, handle, title }) {
       if (!content.create) {
-        throw new Error('The plugin cannot write content: it needs the content:write capability.');
+        throw new Error(CONTENT_WRITE_REQUIRED);
       }
       const created = await content.create(collection, {
         [handleField]: handle,

@@ -2,5 +2,7 @@
 // only lets the package typecheck without the Workers types, which would clash with the site's own.
 declare module 'cloudflare:workers' {
   export const env: Record<string, unknown>;
-  export const cache: { purge(options: { tags?: string[] }): Promise<unknown> };
+  export const cache: {
+    purge(options: { tags?: string[] }): Promise<{ success: boolean; errors?: { code: number; message: string }[] } | void>;
+  };
 }

@@ -13,7 +13,7 @@ import { buildPluginDefinition, PLUGIN_ID, PLUGIN_VERSION, type ShopifyPluginHoo
 
 export { PLUGIN_ID, PLUGIN_VERSION };
 export type { ShopifyPluginHooks, ShopifyPluginOptions };
-export { runSync, SyncRefusedError, normaliseShopifyId } from './sync/run-sync';
+export { runSync, SyncRefusedError } from './sync/run-sync';
 export type { SyncDeps } from './sync/run-sync';
 export type {
   ContentStore,

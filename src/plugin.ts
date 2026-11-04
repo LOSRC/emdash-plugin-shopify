@@ -1,7 +1,7 @@
 import { createStorefrontProductsClient } from './core/storefront-products';
 import type { PurgeTags } from './core/purge';
 import type { ContentFieldNames, ContentApi } from './emdash/content-store';
-import { createEmdashContentStore } from './emdash/content-store';
+import { CONTENT_WRITE_REQUIRED, createEmdashContentStore } from './emdash/content-store';
 import { emdashProductOptionsRefresher } from './emdash/block-types';
 import { handleAdminInteraction, type StoredRun } from './emdash/admin-page';
 import type { ProductOptionsConfig } from './emdash/product-options';
@@ -79,7 +79,7 @@ async function performSync(
   }
   const http = ctx.http;
   if (!http) return refuse('The plugin has no network access: it needs the network:request capability.');
-  if (!ctx.content?.create) return refuse('The plugin cannot write content: it needs the content:write capability.');
+  if (!ctx.content?.create) return refuse(CONTENT_WRITE_REQUIRED);
 
   // Every request goes through `ctx.http.fetch`, which only reaches the hosts the plugin declared.
   const shopify = createStorefrontProductsClient({
