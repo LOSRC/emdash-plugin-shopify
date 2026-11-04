@@ -10,7 +10,7 @@ export const CART_API_BASE = '/api/cart';
 export const CART_PAGE_PATH = '/cart/';
 
 /** A product page path; `{handle}` is replaced by the product's handle. */
-export const DEFAULT_PRODUCT_PATH = '/product/{handle}';
+export const DEFAULT_PRODUCT_PATH = '/product/{handle}/';
 
 /** The free-shipping line in the totals. */
 export const DEFAULT_SHIPPING_NOTE = 'Free shipping (UK)';

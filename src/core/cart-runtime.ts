@@ -113,7 +113,7 @@ export async function handleAdd(
 
   session.write({ id: result.cart.id, snapshot: toSnapshot(result.cart) });
   if (!json) return redirectToCart();
-  return wantsCartView(request) ? privateJson(toCartView(result.cart)) : jsonResponse(toSnapshot(result.cart));
+  return wantsCartView(request) ? privateJson(toCartView(result.cart)) : privateJson(toSnapshot(result.cart));
 }
 
 /**

@@ -23,13 +23,13 @@ describe('cart defaults', () => {
   });
 
   it('holds the default texts and paths', () => {
-    expect(DEFAULT_PRODUCT_PATH).toBe('/product/{handle}');
+    expect(DEFAULT_PRODUCT_PATH).toBe('/product/{handle}/');
     expect(DEFAULT_SHIPPING_NOTE).toBe('Free shipping (UK)');
     expect(DEFAULT_VARIANT_TITLE).toBe('Default Title');
   });
 
   it('builds a product link, encoding the handle', () => {
-    expect(productHref(DEFAULT_PRODUCT_PATH, 'blue mug')).toBe('/product/blue%20mug');
+    expect(productHref(DEFAULT_PRODUCT_PATH, 'blue mug')).toBe('/product/blue%20mug/');
     expect(productHref('/shop/{handle}/', 'a')).toBe('/shop/a/');
   });
 

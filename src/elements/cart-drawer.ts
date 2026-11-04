@@ -26,6 +26,7 @@ import type { CartChangeDetail, CartOutcome } from './cart-client';
 const CLOSE_FALLBACK_MS = 400;
 
 const EMPTY_VIEW_NOTE = 'Your cart is empty.';
+const BUSY_NOTE = 'Your cart is still updating. Please try again in a moment.';
 
 export class CartDrawerElement extends HTMLElement {
   #view: CartView | null = null;
@@ -163,7 +164,7 @@ export class CartDrawerElement extends HTMLElement {
     if (!action) return;
 
     event.preventDefault();
-    if (this.#busy) return;
+    if (this.#isBusy()) return;
     const submitter = event.submitter;
     submitter?.setAttribute('aria-busy', 'true');
     const announce = {
@@ -206,13 +207,23 @@ export class CartDrawerElement extends HTMLElement {
     await this.#send(this.#url('view'), undefined, {});
   }
 
-  /** One request at a time: a second tap while one is in flight is ignored, not queued. */
+  /**
+   * One request at a time: a second tap while one is in flight is not sent, and not silently lost
+   * either: the live region says so, so the customer knows to press again. (It is not queued, so a
+   * double click on Add cannot add twice.)
+   */
+  #isBusy(): boolean {
+    if (this.#busy) this.#announce(BUSY_NOTE);
+    return this.#busy;
+  }
+
+  /** Send one request; see `#isBusy` for what a second one does. */
   async #send(
     url: string,
     body: FormData | undefined,
     options: { announce?: (view: CartView) => string; keepFocus?: { lineId: string; part?: string } },
   ): Promise<void> {
-    if (this.#busy) return;
+    if (this.#isBusy()) return;
     this.#busy = true;
     this.#setBusy(true);
     // Open first, so the customer sees the drawer working rather than a button that did nothing.

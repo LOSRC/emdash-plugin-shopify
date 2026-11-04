@@ -22,7 +22,7 @@
 - Cart view and summary responses are now `Cache-Control: private, no-store`, from one helper that the purge response also uses.
 - `<cart-drawer>` also enhances update and remove form posts (to its `update-url` and `remove-url`) on any page it is rendered on, not just add. `/cart/` keeps plain posts, because the drawer is not rendered there.
 - `CartPage` and `CartTotals` render the checkout and image URLs only when they are `https:`, the rule the drawer already used (`isHttpsUrl`).
-- The components, the drawer and the count take their defaults (`/api/cart` and its route names, `/product/{handle}`, `Free shipping (UK)`, `Default Title`) from one module, exported from `/core` as `CART_API_BASE`, `cartRoutes`, `DEFAULT_PRODUCT_PATH`, `DEFAULT_SHIPPING_NOTE` and `DEFAULT_VARIANT_TITLE`.
+- The components, the drawer and the count take their defaults (`/api/cart` and its route names, `/product/{handle}/`, `Free shipping (UK)`, `Default Title`) from one module, exported from `/core` as `CART_API_BASE`, `cartRoutes`, `DEFAULT_PRODUCT_PATH`, `DEFAULT_SHIPPING_NOTE` and `DEFAULT_VARIANT_TITLE`.
 - Added the free UK shipping line to the totals (`shippingNote`, default `Free shipping (UK)`).
 
 ## 0.2.0

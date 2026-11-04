@@ -122,6 +122,7 @@ describe('handleAdd - content negotiation', () => {
 
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toContain('application/json');
+    expect(res.headers.get('cache-control')).toBe('private, no-store');
     expect(await res.json()).toEqual({ lineCount: 2, subtotal: '36.00', currency: 'GBP' });
   });
 

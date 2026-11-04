@@ -180,7 +180,7 @@ Import by path: `import CartPage from '@losrc/emdash-plugin-shopify/components/C
 
 | Component | Props |
 |---|---|
-| `CartPage` | `cart` (a `CartView` or `null`), `loadFailed?`, `actionFailed?`, `apiBase?` (`/api/cart`), `productPath?` (`/product/{handle}`), `shippingNote?` (`Free shipping (UK)`), `continueHref?` (`/`), `class?` |
+| `CartPage` | `cart` (a `CartView` or `null`), `loadFailed?`, `actionFailed?`, `apiBase?` (`/api/cart`), `productPath?` (`/product/{handle}/`), `shippingNote?` (`Free shipping (UK)`), `continueHref?` (`/`), `class?` |
 | `CartTotals` | `cart`, `shippingNote?`, `continueHref?`, `class?` (used by `CartPage`) |
 | `CartEmpty` | `href?` (`/`), `class?` (used by `CartPage`) |
 | `CartDrawer` | `apiBase?`, `cartPath?` (`/cart/`), `productPath?`, `shippingNote?`, `title?` (`Your cart`), `class?` |
