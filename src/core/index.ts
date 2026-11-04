@@ -7,7 +7,17 @@ export { DEFAULT_API_VERSION, createShopifyTransport } from './transport';
 export type { ShopifyTransport, ShopifyTransportConfig, StorefrontTokenKind } from './transport';
 export { createStorefrontCartClient, storefrontConfigFromEnv } from './storefront';
 export type { StorefrontConfig, StorefrontEnv } from './storefront';
-export type { ShopifyCartClient, CartMutationResult, UserError } from './client';
+export { createStorefrontClient, createStorefrontProductsClient } from './storefront-products';
+export { readShopData } from './shop-data';
+export type {
+  ShopProduct,
+  ShopVariant,
+  ShopImage,
+  ChannelProduct,
+  ShopDataResult,
+  ShopDataReadout,
+} from './shop-data';
+export type { ShopifyCartClient, ShopifyProductsClient, ShopifyClient, CartMutationResult, UserError } from './client';
 export { parseLineForm, parseUpdateForm, parseRemoveForm, toSnapshot, toCartView, isStaleCart } from './cart';
 export type { CartLineInput, CartLineUpdate, ParseResult } from './cart';
 export { astroCartSession } from './cart-session';

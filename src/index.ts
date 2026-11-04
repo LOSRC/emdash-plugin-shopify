@@ -1,5 +1,5 @@
 /**
- * Package root: the EmDash plugin entry. Placeholder in 0.1.0: it exports the descriptor a site
+ * Package root: the EmDash plugin entry. Placeholder in 0.2.0: it exports the descriptor a site
  * lists in `emdash({ plugins: [...] })`, and the plugin itself (routes, admin page, sync) lands with
  * the sync plugin work. The shop core, which works without EmDash, is `@losrc/emdash-plugin-shopify/core`.
  */
@@ -17,7 +17,7 @@ export interface ShopifyPluginOptions {
 export function shopifyPlugin(options: ShopifyPluginOptions) {
   return {
     id: PLUGIN_ID,
-    version: '0.1.0',
+    version: '0.2.0',
     format: 'native' as const,
     entrypoint: '@losrc/emdash-plugin-shopify',
     options,

@@ -1,6 +1,10 @@
 import type { Cart, CartLine } from './types';
 import type { CartLineInput, CartLineUpdate } from './cart';
-import type { CartMutationResult, ShopifyCartClient } from './client';
+import type { CartMutationResult, ShopifyClient } from './client';
+import { createFakeCatalogue } from './fake-catalogue';
+import type { FakeCatalogue } from './fake-catalogue';
+
+export type { FakeProductInput, FakeVariantInput } from './fake-catalogue';
 
 /**
  * In-memory Shopify cart client, exported as `@losrc/emdash-plugin-shopify/core/testing`. It is the
@@ -22,10 +26,10 @@ interface FakeCart {
   lines: FakeLine[];
 }
 
-export interface FakeCartClient extends ShopifyCartClient {
+export interface FakeCartClient extends ShopifyClient, Pick<FakeCatalogue, 'seedProduct' | 'setPublished' | 'removeProduct'> {
   /** The carts currently held in memory, for assertions/introspection. */
   readonly carts: ReadonlyMap<string, Cart>;
-  /** Arm the next client call (create/add/update/remove/getCart) to reject with `error`. One-shot. */
+  /** Arm the next client call (cart or product read/write) to reject with `error`. One-shot. */
   failNextWith(error: Error): void;
   /**
    * Make every subsequent mutation resolve `{ cart: null, userErrors: [{ message }] }` - Shopify was
@@ -139,6 +143,8 @@ export function createFakeCartClient(options: FakeClientOptions = {}): FakeCartC
     }
   }
 
+  const catalogue = createFakeCatalogue({ currency, checkFailure });
+
   const ok = (cart: FakeCart): CartMutationResult => ({ cart: render(cart), userErrors: [] });
   const gone: CartMutationResult = { cart: null, userErrors: [] };
 
@@ -148,6 +154,8 @@ export function createFakeCartClient(options: FakeClientOptions = {}): FakeCartC
       for (const [id, cart] of store) snapshot.set(id, render(cart));
       return snapshot;
     },
+
+    ...catalogue,
 
     failNextWith(error: Error) {
       pendingError = error;

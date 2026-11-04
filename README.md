@@ -6,7 +6,6 @@ A simple, robust Shopify integration for [EmDash](https://emdashcms.com) sites o
 
 - **Shop core (`/core`):** a Worker-owned cart on the Shopify Storefront API that works without JavaScript, with the cart id kept in the Astro session and never in a URL.
 - **Sync plugin (package root):** an EmDash admin page with a Sync button that links Shopify products to EmDash product entries by Shopify product ID, making drafts for new products and never overwriting editorial content. In development.
-
 - **Cart UI (`/components/*`, `/elements/*`):** Tailwind 4 Astro components for a `/cart/` page, a slide-out cart drawer and a header count. The page works with no JavaScript; the drawer and count are small custom elements with no framework dependency.
 
 Status: 0.2.0, in development. First used by christophergoddard.net.
@@ -131,7 +130,31 @@ export function GET(context: APIContext): Promise<Response> {
 
 ### Testing
 
-`@losrc/emdash-plugin-shopify/core/testing` exports `createFakeCartClient()`, an in-memory cart client with real cart behaviour (reuse, stale-cart recovery, line merging, exact-decimal totals) and switches to simulate Shopify failing (`failNextWith`) or refusing a change (`rejectMutationsWith`). Drive the handlers with it and a plain `CartSession`; no Worker runtime or Shopify account is needed.
+`@losrc/emdash-plugin-shopify/core/testing` exports `createFakeCartClient()`, an in-memory client with real cart behaviour (reuse, stale-cart recovery, line merging, exact-decimal totals), a product catalogue with publish state (`seedProduct`, `setPublished`, `removeProduct`; an unpublished product is invisible, as on Shopify) and switches to simulate Shopify failing (`failNextWith`, which also fails the next product read) or refusing a change (`rejectMutationsWith`). Drive the handlers with it and a plain `CartSession`; no Worker runtime or Shopify account is needed.
+
+## Reading shop data
+
+Shop data is what a page shows about a product: main image, title, description, price range, variants, availability and handle. Shopify is its only source; an EmDash entry stores the Shopify product ID and nothing else of it.
+
+```ts
+import { createStorefrontClient, readShopData, storefrontConfigFromEnv, SHOP_DATA_CACHE_TAG } from '@losrc/emdash-plugin-shopify/core';
+
+const client = createStorefrontClient(storefrontConfigFromEnv(env));
+const { products, cacheable } = await readShopData(client, ['7463040909518', '7463040910000']);
+
+const result = products['7463040909518'];
+if (result.status === 'ok') {
+  result.product.title; // also gid, handle, description, image, priceRange, options, variants, availableForSale
+} else {
+  result.reason; // 'not-found' (unknown or not published to the channel) or 'shopify-error'
+}
+```
+
+`readShopData(client, ids)` never throws. Ids are numeric Shopify product IDs (a `gid://shopify/Product/...` also works); the result is keyed by the id as you wrote it. Each id is either `{ status: 'ok', product }` or `{ status: 'unavailable', reason }`, so a page can always render something. `cacheable` is `false` whenever any id was unavailable or Shopify failed (every id is then `shopify-error`): send such a page with `Cache-Control: no-store` and without the `SHOP_DATA_CACHE_TAG` cache tag, so it never enters the cache. Prices are raw `Money`; format them with `formatMoney` and `formatPriceRange`.
+
+Only a Storefront token is used, never the Admin API. Shopify answers only for products published to the token's sales channel, so an unpublished product looks the same as an unknown one. Ids are sent to Shopify 250 at a time.
+
+`client.listChannelProducts()` returns `{ id, handle, title }` for every product on the token's sales channel, following pagination. Unlike `readShopData`, it and `client.getProducts(ids)` reject when Shopify fails, so a caller that must not act on a bad answer can stop.
 
 ## The cart UI
 

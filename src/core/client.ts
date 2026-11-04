@@ -1,4 +1,5 @@
 import type { Cart } from './types';
+import type { ChannelProduct, ShopProduct } from './shop-data';
 import type { CartLineInput, CartLineUpdate } from './cart';
 
 /**
@@ -38,3 +39,22 @@ export interface ShopifyCartClient {
   /** Fetch a cart by id; `null` once Shopify no longer resolves it. */
   getCart(cartId: string): Promise<Cart | null>;
 }
+
+/**
+ * The products capability: shop data by product ID, and the products on the token's sales channel.
+ * Unlike `readShopData` (the public reader, which never throws), both methods reject on transport
+ * and GraphQL failures, so a caller that must not act on a bad answer (the sync) sees the failure.
+ */
+export interface ShopifyProductsClient {
+  /**
+   * Shop data for the given numeric product IDs. Every id asked for is a key of the result; the value
+   * is `null` when Shopify does not return the product (unknown, deleted or not published to the
+   * channel). Batches over Shopify's per-request limit internally.
+   */
+  getProducts(ids: string[]): Promise<Map<string, ShopProduct | null>>;
+  /** Every product published to the token's sales channel (id, handle, title), following pagination. */
+  listChannelProducts(): Promise<ChannelProduct[]>;
+}
+
+/** Everything the shop core asks of Shopify: the cart and the products. */
+export type ShopifyClient = ShopifyCartClient & ShopifyProductsClient;
