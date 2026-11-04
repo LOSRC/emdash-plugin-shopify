@@ -76,12 +76,51 @@ describe('runSync: another run got there first', () => {
     ]);
   });
 
-  it('checks again before every draft, not only the first', async () => {
+  it('looks again once before the drafts, not before each one', async () => {
     const { shopify, store, purge } = setup();
     shopify.seedProduct({ id: '101', handle: 'blue-mug', title: 'Blue Mug' });
     shopify.seedProduct({ id: '102', handle: 'red-mug', title: 'Red Mug' });
-    // Listing 1 is the run's own; listing 2 is the check before the first draft; the entry for 102 appears after that.
-    const racing = entryAppearsAfterListing(store, 2, { entryId: 'theirs', shopifyId: '102', slug: 'red-mug', title: 'Red Mug' });
+    shopify.seedProduct({ id: '103', handle: 'green-mug', title: 'Green Mug' });
+    let listings = 0;
+    const counting: MemoryContentStore = {
+      ...store,
+      async listLinked() {
+        listings += 1;
+        return store.listLinked();
+      },
+      createDraft: (draft) => store.createDraft(draft),
+    };
+
+    const report = await runSync({ shopify, store: counting, purge });
+
+    expect(report.created).toHaveLength(3);
+    expect(listings).toBe(2); // the run's own, and the one just before the first draft
+  });
+
+  it('does not look again when there is nothing to make', async () => {
+    const { shopify, store, purge } = setup();
+    shopify.seedProduct({ id: '101', handle: 'blue-mug', title: 'Blue Mug' });
+    await runSync({ shopify, store, purge });
+    let listings = 0;
+    const counting: MemoryContentStore = {
+      ...store,
+      async listLinked() {
+        listings += 1;
+        return store.listLinked();
+      },
+      createDraft: (draft) => store.createDraft(draft),
+    };
+
+    await runSync({ shopify, store: counting, purge });
+
+    expect(listings).toBe(1);
+  });
+
+  it('skips only the product whose entry appeared, and still makes the others', async () => {
+    const { shopify, store, purge } = setup();
+    shopify.seedProduct({ id: '101', handle: 'blue-mug', title: 'Blue Mug' });
+    shopify.seedProduct({ id: '102', handle: 'red-mug', title: 'Red Mug' });
+    const racing = entryAppearsAfterListing(store, 1, { entryId: 'theirs', shopifyId: '102', slug: 'red-mug', title: 'Red Mug' });
 
     const report = await runSync({ shopify, store: racing, purge });
 

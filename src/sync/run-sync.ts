@@ -35,9 +35,9 @@ function message(error: unknown): string {
  * it makes a draft for each product with no entry, reports (never writes) entries whose product
  * the channel no longer returns, and leaves every other entry alone. It never updates or deletes.
  *
- * Just before each draft it lists the store again, so an entry that appeared since the run started
- * (another run, an editor) is not duplicated. That narrows the window rather than closing it: the
- * plugin's run lock is what keeps two runs apart.
+ * Just before the first draft it lists the store once more, so an entry that appeared since the run
+ * started (another run, an editor) is not duplicated. That narrows the window rather than closing it:
+ * the plugin's run lock is what keeps two runs apart.
  *
  * Shopify and the store are read before anything is written: if either rejects, or Shopify returns
  * an empty channel while entries are linked (a bad token looks like that), the run rejects before any
@@ -78,14 +78,17 @@ export async function runSync(deps: SyncDeps): Promise<SyncReport> {
   }
   report.flagged = flagged;
 
-  for (const product of channel) {
-    if (entriesById.has(product.id)) continue;
+  const missing = channel.filter((product) => !entriesById.has(product.id));
+  // Look again once, just before the first write: an entry may have appeared since the listing above
+  // (a second run, an editor). The run lock in the plugin is what stops two runs; this narrows the gap
+  // a little. A listing that fails here stops the run before any write, like the first one. Nothing
+  // to make costs nothing.
+  const appearedIds =
+    missing.length > 0 ? new Set((await store.listLinked()).map((entry) => linkedProductId(entry))) : new Set<string>();
+
+  for (const product of missing) {
     try {
-      // Look again just before writing: an entry may have appeared since the listing above (a second
-      // run, an editor). The run lock in the plugin is what stops two runs; this is the backstop. It
-      // costs one more listing per draft made, and nothing when there is nothing to make.
-      const appeared = (await store.listLinked()).find((entry) => linkedProductId(entry) === product.id);
-      if (appeared) {
+      if (appearedIds.has(product.id)) {
         report.unchanged += 1;
         report.warnings.push(
           `An entry for Shopify product ${product.id} ("${product.handle}") appeared while the sync was running, so no draft was made. Was another sync running?`,
