@@ -31,6 +31,7 @@ describe('the /core public API', () => {
         'handleSummary',
         'handleUpdate',
         'isHttpsUrl',
+        'isCartGone',
         'isStaleCart',
         'jsonResponse',
         'parseLineForm',

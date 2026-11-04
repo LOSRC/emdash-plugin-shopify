@@ -1,3 +1,4 @@
+import type { CartMutationResult } from './client';
 import type { Cart, CartSnapshot, CartView } from './types';
 
 /**
@@ -99,8 +100,25 @@ export function toCartView(cart: Cart): CartView {
 }
 
 /**
+ * True when a mutation's answer says the cart itself is gone (expired after about 10 days idle, or
+ * completed at checkout), as opposed to Shopify refusing the change on a live cart.
+ *
+ * ASSUMPTION, from how the Storefront API answers a `cartId` it cannot resolve: `cart: null` plus a
+ * userError whose `field` is `["cartId"]` ("The specified cart does not exist.", code `INVALID`). The
+ * code alone is too coarse (`INVALID` covers many refusals), so the field decides. A `cart: null` with
+ * no userErrors at all is also read as gone: there is no refusal to report. Any other userError on a
+ * null cart is a refusal, and the cart is still there. `getCart` returning `null` is the other signal,
+ * and needs no help.
+ */
+export function isCartGone(result: CartMutationResult): boolean {
+  if (result.cart !== null) return false;
+  return result.userErrors.length === 0 || result.userErrors.some((error) => error.field?.[0] === 'cartId');
+}
+
+/**
  * A stored cart id is stale once Shopify no longer resolves it: `cart(id:)` returns `null` after the
  * cart expires (about 10 days idle) or is completed at checkout. An empty-but-live cart is not stale.
+ * For a mutation's answer, which says so with a userError about `cartId`, use {@link isCartGone}.
  */
 export function isStaleCart(cart: Cart | null): boolean {
   return cart === null;

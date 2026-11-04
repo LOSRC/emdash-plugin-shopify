@@ -14,6 +14,8 @@ import type { CartLineInput, CartLineUpdate } from './cart';
 export interface UserError {
   field: string[] | null;
   message: string;
+  /** Shopify's `CartErrorCode` (for example `INVALID`), when it gives one. Too coarse to tell a lost cart apart: see `isCartGone`. */
+  code?: string;
 }
 
 /** Every mutation returns Shopify's authoritative cart (or `null` if it could not act) plus userErrors. */
@@ -30,7 +32,7 @@ export interface CartMutationResult {
 export interface ShopifyCartClient {
   /** Create a new cart seeded with the given lines. */
   cartCreate(lines: CartLineInput[]): Promise<CartMutationResult>;
-  /** Add lines to an existing cart. `cart: null` means the id no longer resolves (stale). */
+  /** Add lines to an existing cart. A lost cart answers `cart: null` with a userError about `cartId` (see `isCartGone`). */
   cartLinesAdd(cartId: string, lines: CartLineInput[]): Promise<CartMutationResult>;
   /** Change the quantity of existing cart lines (by CartLine id). */
   cartLinesUpdate(cartId: string, lines: CartLineUpdate[]): Promise<CartMutationResult>;

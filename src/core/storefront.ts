@@ -95,7 +95,7 @@ export function createStorefrontCartClient(config: StorefrontConfig): ShopifyCar
         mutation CartCreate($lines: [CartLineInput!]!) {
           cartCreate(input: { lines: $lines }) {
             cart { ...CartFields }
-            userErrors { field message }
+            userErrors { field message code }
           }
         }`,
         { lines },
@@ -109,7 +109,7 @@ export function createStorefrontCartClient(config: StorefrontConfig): ShopifyCar
         mutation CartLinesAdd($cartId: ID!, $lines: [CartLineInput!]!) {
           cartLinesAdd(cartId: $cartId, lines: $lines) {
             cart { ...CartFields }
-            userErrors { field message }
+            userErrors { field message code }
           }
         }`,
         { cartId, lines },
@@ -123,7 +123,7 @@ export function createStorefrontCartClient(config: StorefrontConfig): ShopifyCar
         mutation CartLinesUpdate($cartId: ID!, $lines: [CartLineUpdateInput!]!) {
           cartLinesUpdate(cartId: $cartId, lines: $lines) {
             cart { ...CartFields }
-            userErrors { field message }
+            userErrors { field message code }
           }
         }`,
         { cartId, lines },
@@ -137,7 +137,7 @@ export function createStorefrontCartClient(config: StorefrontConfig): ShopifyCar
         mutation CartLinesRemove($cartId: ID!, $lineIds: [ID!]!) {
           cartLinesRemove(cartId: $cartId, lineIds: $lineIds) {
             cart { ...CartFields }
-            userErrors { field message }
+            userErrors { field message code }
           }
         }`,
         { cartId, lineIds },

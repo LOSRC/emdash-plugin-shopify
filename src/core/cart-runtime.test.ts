@@ -352,10 +352,10 @@ describe('add rejected by Shopify (cart: null + userErrors) - a failure, never a
 });
 
 
-describe('no cart id in any URL the handlers produce', () => {
+describe('no cart id or token in any Location the handlers produce', () => {
   const CART_GID = 'gid://shopify/Cart/';
 
-  it('keeps the cart id out of every redirect and JSON body, on success and on failure', async () => {
+  it('keeps the cart id and token out of every redirect, and the cart GID out of every body, on success and on failure', async () => {
     const client = createFakeCartClient();
     const { session, state } = memorySession();
     const responses: Response[] = [];
@@ -384,7 +384,8 @@ describe('no cart id in any URL the handlers produce', () => {
       // The acceptance criterion is about URLs: neither the full id nor its token may appear.
       expect(location).not.toContain(cartId);
       expect(location).not.toContain(cartToken);
-      // Bodies must not carry the cart GID either (line ids are not cart ids and may appear later).
+      // Bodies never carry the cart GID. They may carry the cart token: a CartLine id ends `?cart=<token>`
+      // and the view's checkoutUrl embeds it, which the next test pins down.
       const body = await res.text();
       expect(body).not.toContain(CART_GID);
     }
@@ -626,6 +627,89 @@ describe('a stored cart Shopify no longer resolves is forgotten, so the header c
   });
 });
 
+describe.each(['userErrors', 'null'] as const)('a cart Shopify has lost, answered as %s', (form) => {
+  const lost = (): StoredCart => ({
+    id: 'gid://shopify/Cart/expired-xyz',
+    snapshot: { lineCount: 3, subtotal: '30.00', currency: 'GBP' },
+  });
+  const lostClient = () => {
+    const client = createFakeCartClient();
+    client.answerMissingCartWith(form);
+    return client;
+  };
+
+  it('add starts a fresh cart', async () => {
+    const client = lostClient();
+    const { session, state } = memorySession(lost());
+
+    const res = await handleAdd(postForm({ merchandiseId: VARIANT }, { json: true }), client, session);
+
+    expect(res.status).toBe(200);
+    expect(state.current!.id).not.toBe(lost().id);
+    expect(state.current!.snapshot.lineCount).toBe(1);
+    expect(client.carts.size).toBe(1);
+  });
+
+  it('update and remove forget it and answer an empty view', async () => {
+    for (const handle of [handleUpdate, handleRemove]) {
+      const { session, state } = memorySession(lost());
+      const res = await handle(viewRequest({ lineId: 'gid://shopify/CartLine/x', quantity: '2' }), lostClient(), session);
+      expect(res.status).toBe(200);
+      expect(await res.json()).toMatchObject({ lineCount: 0, lines: [] });
+      expect(state.current).toBeUndefined();
+    }
+  });
+});
+
+describe('a refusal on a live cart is not a lost cart', () => {
+  const REFUSAL = { field: ['lines', '0', 'merchandiseId'], message: 'The merchandise is not available.' };
+
+  /** A live cart with one line, whose line mutations Shopify refuses with a userError that is not about the cart id. */
+  async function liveCartThatRefuses() {
+    const real = createFakeCartClient();
+    const { session, state } = memorySession();
+    await handleAdd(postForm({ merchandiseId: VARIANT, quantity: '2' }), real, session);
+    const lineId = onlyCart(real).lines.nodes[0]!.id;
+    const refusing = { cart: null, userErrors: [REFUSAL] };
+    const client = {
+      ...real,
+      cartLinesAdd: async () => refusing,
+      cartLinesUpdate: async () => refusing,
+      cartLinesRemove: async () => refusing,
+    };
+    return { real, client, session, state, lineId, before: state.current };
+  }
+
+  it('add answers 422 and keeps the cart and its other lines', async () => {
+    const { real, client, session, state, before } = await liveCartThatRefuses();
+
+    const res = await handleAdd(postForm({ merchandiseId: VARIANT_2 }, { json: true }), client, session);
+
+    expect(res.status).toBe(422);
+    expect(state.current).toEqual(before);
+    expect(real.carts.size).toBe(1); // no replacement cart was made
+    expect(onlyCart(real).lines.nodes).toHaveLength(1);
+  });
+
+  it('update and remove answer 422 and keep the stored cart', async () => {
+    for (const handle of [handleUpdate, handleRemove]) {
+      const { client, session, state, lineId, before } = await liveCartThatRefuses();
+      const res = await handle(viewRequest({ lineId, quantity: '9' }), client, session);
+      expect(res.status).toBe(422);
+      expect(state.current).toEqual(before);
+    }
+  });
+
+  it('no-JS update and remove redirect and keep the stored cart', async () => {
+    for (const handle of [handleUpdate, handleRemove]) {
+      const { client, session, state, lineId, before } = await liveCartThatRefuses();
+      const res = await handle(postForm({ lineId, quantity: '9' }), client, session);
+      expect(res.status).toBe(303);
+      expect(state.current).toEqual(before);
+    }
+  });
+});
+
 describe('handleSummary - caching', () => {
   it('is private and uncacheable, since the count element exists because pages are cached and shared', async () => {
     const res = await handleSummary(memorySession().session);
@@ -633,8 +717,8 @@ describe('handleSummary - caching', () => {
   });
 });
 
-describe('the cart id stays out of the cart view responses', () => {
-  it('has neither the cart GID nor its token in a view body, though checkoutUrl is there', async () => {
+describe('what a cart view body carries of the cart id', () => {
+  it('has no cart GID; the cart token appears only in line ids and checkoutUrl', async () => {
     const client = createFakeCartClient();
     const { session, state } = memorySession();
     const responses = [
@@ -642,12 +726,18 @@ describe('the cart id stays out of the cart view responses', () => {
       await handleView(client, session),
     ];
     const lineId = onlyCart(client).lines.nodes[0]!.id;
+    const token = state.current!.id.split('/').pop()!;
     responses.push(await handleUpdate(viewRequest({ lineId, quantity: '2' }), client, session));
-    responses.push(await handleRemove(viewRequest({ lineId }), client, session));
     for (const res of responses) {
-      const body = await res.text();
-      expect(body).not.toContain('gid://shopify/Cart/');
+      expect(res.headers.get('cache-control')).toBe('private, no-store');
       expect(res.headers.get('location')).toBeNull();
+      const view = await res.json();
+      expect(JSON.stringify(view)).not.toContain('gid://shopify/Cart/');
+      expect(view.checkoutUrl).toContain(token);
+      for (const line of view.lines) expect(line.id).toContain(`?cart=${token}`);
+      // Nowhere else: strip the two fields that carry it and it is gone.
+      const rest = { ...view, checkoutUrl: undefined, lines: view.lines.map((line: object) => ({ ...line, id: undefined })) };
+      expect(JSON.stringify(rest)).not.toContain(token);
     }
     expect(state.current!.id).toContain('Cart');
   });

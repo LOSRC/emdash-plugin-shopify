@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseLineForm, parseUpdateForm, parseRemoveForm, toSnapshot, toCartView, isStaleCart } from './cart';
+import { parseLineForm, parseUpdateForm, parseRemoveForm, toSnapshot, toCartView, isStaleCart, isCartGone } from './cart';
 import type { Cart } from './types';
 import cartFixture from './fixtures/cart.json';
 
@@ -82,6 +82,26 @@ describe('isStaleCart', () => {
 
   it('treats a live cart as fresh', () => {
     expect(isStaleCart(cart)).toBe(false);
+  });
+});
+
+describe('isCartGone', () => {
+  it('is true for a null cart with a userError about the cartId (how Shopify answers a lost cart)', () => {
+    const userErrors = [{ field: ['cartId'], message: 'The specified cart does not exist.', code: 'INVALID' }];
+    expect(isCartGone({ cart: null, userErrors })).toBe(true);
+  });
+
+  it('is true for a null cart with no userErrors at all', () => {
+    expect(isCartGone({ cart: null, userErrors: [] })).toBe(true);
+  });
+
+  it('is false for a refusal on a live cart: a null cart with userErrors about something else', () => {
+    expect(isCartGone({ cart: null, userErrors: [{ field: ['lines', '0', 'merchandiseId'], message: 'Sold out', code: 'INVALID' }] })).toBe(false);
+    expect(isCartGone({ cart: null, userErrors: [{ field: null, message: 'Nope' }] })).toBe(false);
+  });
+
+  it('is false whenever Shopify returned a cart', () => {
+    expect(isCartGone({ cart, userErrors: [{ field: ['cartId'], message: 'odd' }] })).toBe(false);
   });
 });
 

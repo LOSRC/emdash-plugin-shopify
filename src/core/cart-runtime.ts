@@ -1,4 +1,4 @@
-import { parseLineForm, parseUpdateForm, parseRemoveForm, toSnapshot, toCartView, isStaleCart } from './cart';
+import { parseLineForm, parseUpdateForm, parseRemoveForm, toSnapshot, toCartView, isCartGone } from './cart';
 import type { ParseResult } from './cart';
 import type { CartMutationResult, ShopifyCartClient } from './client';
 import type { CartSession } from './cart-session';
@@ -14,7 +14,9 @@ import type { CartView } from './types';
  * adapters that build the client and session and hand off here.
  *
  * Responses are built explicitly (not via `context.redirect`) so a redirect is just a 303 with a
- * `Location`, assertable in a unit test. No cart id is ever put in a `Location` or a response body.
+ * `Location`, assertable in a unit test. The cart id is never put in a `Location` or a response body.
+ * The cart token is: a cart view's CartLine ids end `?cart=<token>` and its `checkoutUrl` embeds it (the
+ * drawer needs both), so those responses are `private, no-store` and never shared.
  */
 
 /** The three cart-changing routes; also what `/cart/?error=` names. */
@@ -87,14 +89,15 @@ export async function handleAdd(
   const stored = await session.read();
   let result;
   try {
-    // Add to the stored cart; a null cart back means Shopify no longer resolves it (expired or checked
-    // out), so create a fresh one. A non-null cart is authoritative even when a userError rode along.
+    // Add to the stored cart; if Shopify says that cart is gone (expired or checked out), create a
+    // fresh one. A refusal on a live cart is not that: recreating would drop the visitor's other lines.
+    // A non-null cart is authoritative even when a userError rode along.
     // The try covers only the Shopify round-trips: once a mutation has succeeded, a local failure
     // must not masquerade as "couldn't reach the store" and invite a duplicating retry.
     result = stored
       ? await client.cartLinesAdd(stored.id, [parsed.value])
       : await client.cartCreate([parsed.value]);
-    if (stored && isStaleCart(result.cart)) result = await client.cartCreate([parsed.value]);
+    if (stored && isCartGone(result)) result = await client.cartCreate([parsed.value]);
   } catch {
     // Shopify transport or GraphQL failure: degrade instead of a raw 500, and leave the existing
     // session snapshot untouched (we never wrote it) so the badge keeps telling the truth.
@@ -157,10 +160,12 @@ async function handleLineMutation<T>(
     session.write({ id: result.cart.id, snapshot: toSnapshot(result.cart) });
     return json ? privateJson(toCartView(result.cart)) : redirectToCart();
   }
-  // A null cart is either a refusal (userErrors) or a cart Shopify no longer resolves (stale).
-  if (json && result.userErrors.length > 0) return jsonResponse({ error: CART_UPDATE_REJECTED_MESSAGE }, 422);
-  session.clear();
-  return json ? privateJson(emptyCartView(stored.snapshot.currency)) : redirectToCart();
+  // A null cart is either a cart Shopify no longer resolves (forget it) or a refusal on a live one.
+  if (isCartGone(result)) {
+    session.clear();
+    return json ? privateJson(emptyCartView(stored.snapshot.currency)) : redirectToCart();
+  }
+  return json ? jsonResponse({ error: CART_UPDATE_REJECTED_MESSAGE }, 422) : redirectToCart();
 }
 
 /**

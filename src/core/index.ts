@@ -20,7 +20,7 @@ export type {
   ShopDataReadout,
 } from './shop-data';
 export type { ShopifyCartClient, ShopifyProductsClient, ShopifyClient, CartMutationResult, UserError } from './client';
-export { parseLineForm, parseUpdateForm, parseRemoveForm, toSnapshot, toCartView, isStaleCart } from './cart';
+export { parseLineForm, parseUpdateForm, parseRemoveForm, toSnapshot, toCartView, isStaleCart, isCartGone } from './cart';
 export type { CartLineInput, CartLineUpdate, ParseResult } from './cart';
 export { astroCartSession } from './cart-session';
 export type { CartSession, StoredCart, AstroSessionLike } from './cart-session';

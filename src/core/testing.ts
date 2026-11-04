@@ -10,7 +10,7 @@ export type { FakeProductInput, FakeVariantInput } from './fake-catalogue';
  * In-memory Shopify cart client, exported as `@losrc/emdash-plugin-shopify/core/testing`. It is the
  * second implementation of `ShopifyCartClient`, standing in for the Storefront network adapter in
  * tests. It keeps real cart state in a Map, so tests observe genuine behaviour (a reused cart keeps
- * its id, a `cartLinesAdd` against an unknown id resolves `{ cart: null }` meaning stale, totals track
+ * its id, a mutation against an unknown id answers as a lost cart does, totals track
  * the lines) rather than asserting against mock call-spies. `failNextWith` arms the next call to
  * reject, so the graceful-degradation paths can be driven through the same fake.
  */
@@ -37,6 +37,12 @@ export interface FakeCartClient extends ShopifyClient, Pick<FakeCatalogue, 'seed
    * `failNextWith`, because a rejected variant rejects on the recreate attempt too.
    */
   rejectMutationsWith(message: string): void;
+  /**
+   * How a mutation against a cart the fake does not hold is answered. `'userErrors'` (the default) is
+   * how Shopify answers a lost cart: `cart: null` plus a userError whose field is `["cartId"]`.
+   * `'null'` is the older bare `{ cart: null, userErrors: [] }`.
+   */
+  answerMissingCartWith(form: 'userErrors' | 'null'): void;
 }
 
 export interface FakeClientOptions {
@@ -89,6 +95,7 @@ export function createFakeCartClient(options: FakeClientOptions = {}): FakeCartC
   let lineSeq = 0;
   let pendingError: Error | null = null;
   let rejection: string | null = null;
+  let missingCartForm: 'userErrors' | 'null' = 'userErrors';
 
   /** Throw the armed error if one is pending (one-shot), before any state change. */
   function checkFailure() {
@@ -132,6 +139,9 @@ export function createFakeCartClient(options: FakeClientOptions = {}): FakeCartC
     };
   }
 
+  /** Real CartLine ids look like `gid://shopify/CartLine/<uuid>?cart=<cart token>`: the token rides along. */
+  const lineIdFor = (cart: FakeCart) => `gid://shopify/CartLine/fake-${++lineSeq}?cart=${cart.id.split('/').pop()}`;
+
   function addLines(cart: FakeCart, lines: CartLineInput[]) {
     for (const line of lines) {
       // Real Storefront `cartLinesAdd` merges identical merchandise into one line with a summed
@@ -139,14 +149,17 @@ export function createFakeCartClient(options: FakeClientOptions = {}): FakeCartC
       // that also exists in production.
       const existing = cart.lines.find((candidate) => candidate.merchandiseId === line.merchandiseId);
       if (existing) existing.quantity += line.quantity;
-      else cart.lines.push({ id: `gid://shopify/CartLine/fake-${++lineSeq}`, merchandiseId: line.merchandiseId, quantity: line.quantity });
+      else cart.lines.push({ id: lineIdFor(cart), merchandiseId: line.merchandiseId, quantity: line.quantity });
     }
   }
 
   const catalogue = createFakeCatalogue({ currency, checkFailure });
 
   const ok = (cart: FakeCart): CartMutationResult => ({ cart: render(cart), userErrors: [] });
-  const gone: CartMutationResult = { cart: null, userErrors: [] };
+  const gone = (): CartMutationResult =>
+    missingCartForm === 'null'
+      ? { cart: null, userErrors: [] }
+      : { cart: null, userErrors: [{ field: ['cartId'], message: 'The specified cart does not exist.', code: 'INVALID' }] };
 
   return {
     get carts() {
@@ -165,6 +178,10 @@ export function createFakeCartClient(options: FakeClientOptions = {}): FakeCartC
       rejection = message;
     },
 
+    answerMissingCartWith(form) {
+      missingCartForm = form;
+    },
+
     async cartCreate(lines: CartLineInput[]): Promise<CartMutationResult> {
       checkFailure();
       const rejected = checkRejection();
@@ -180,7 +197,7 @@ export function createFakeCartClient(options: FakeClientOptions = {}): FakeCartC
       const rejected = checkRejection();
       if (rejected) return rejected;
       const cart = store.get(cartId);
-      if (!cart) return gone; // unknown id → Shopify would not resolve it → stale
+      if (!cart) return gone(); // unknown id: Shopify would not resolve it
       addLines(cart, lines);
       return ok(cart);
     },
@@ -190,7 +207,7 @@ export function createFakeCartClient(options: FakeClientOptions = {}): FakeCartC
       const rejected = checkRejection();
       if (rejected) return rejected;
       const cart = store.get(cartId);
-      if (!cart) return gone;
+      if (!cart) return gone();
       for (const update of updates) {
         const line = cart.lines.find((candidate) => candidate.id === update.id);
         if (line) line.quantity = update.quantity;
@@ -203,7 +220,7 @@ export function createFakeCartClient(options: FakeClientOptions = {}): FakeCartC
       const rejected = checkRejection();
       if (rejected) return rejected;
       const cart = store.get(cartId);
-      if (!cart) return gone;
+      if (!cart) return gone();
       cart.lines = cart.lines.filter((line) => !lineIds.includes(line.id));
       return ok(cart);
     },
