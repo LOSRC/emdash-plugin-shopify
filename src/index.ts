@@ -1,25 +1,51 @@
 /**
- * Package root: the EmDash plugin entry. Placeholder in 0.2.0: it exports the descriptor a site
- * lists in `emdash({ plugins: [...] })`, and the plugin itself (routes, admin page, sync) lands with
- * the sync plugin work. The shop core, which works without EmDash, is `@losrc/emdash-plugin-shopify/core`.
+ * Package root: the EmDash plugin. A site lists `shopifyPlugin({ shop })` in `emdash({ plugins: [...] })`;
+ * EmDash then loads `createPlugin` from this module. The plugin adds a Sync page to the admin that
+ * links Shopify products to product entries. The shop core, which works without EmDash, is
+ * `@losrc/emdash-plugin-shopify/core`.
+ *
+ * This module is imported by Node when `astro.config` loads, so nothing here imports
+ * `cloudflare:workers` at load.
  */
+import { definePlugin, type PluginDescriptor } from 'emdash';
+import { buildPluginDefinition, PLUGIN_ID, PLUGIN_VERSION, type ShopifyPluginHooks, type ShopifyPluginOptions } from './plugin';
 
-/** The plugin's id: an unscoped kebab-case name, also the URL segment under `/_emdash/api/plugins/`. */
-export const PLUGIN_ID = 'shopify';
-
-/** Options the site passes in `astro.config`. Serialised into a virtual module: never put a token here. */
-export interface ShopifyPluginOptions {
-  /** Shop domain, e.g. `example-shop.myshopify.com`. Not a secret; the outbound host allow-list needs it at config time. */
-  shop: string;
-}
+export { PLUGIN_ID, PLUGIN_VERSION };
+export type { ShopifyPluginHooks, ShopifyPluginOptions };
+export { runSync, SyncRefusedError, normaliseShopifyId } from './sync/run-sync';
+export type { SyncDeps } from './sync/run-sync';
+export type {
+  ContentStore,
+  LinkedEntry,
+  NewDraft,
+  CreatedEntry,
+  FlaggedEntry,
+  SyncReport,
+  RefreshProductOptions,
+  PurgeTags,
+} from './sync/types';
+export { createEmdashContentStore, DEFAULT_FIELDS } from './emdash/content-store';
+export type { ContentApi, ContentFieldNames } from './emdash/content-store';
+export { createProductOptionsRefresher } from './emdash/product-options';
+export type { ProductOptionsConfig } from './emdash/product-options';
 
 /** The plugin descriptor for `emdash({ plugins: [shopifyPlugin({ shop })] })`. */
-export function shopifyPlugin(options: ShopifyPluginOptions) {
+export function shopifyPlugin(options: ShopifyPluginOptions): PluginDescriptor<ShopifyPluginOptions> {
   return {
     id: PLUGIN_ID,
-    version: '0.2.0',
-    format: 'native' as const,
+    version: PLUGIN_VERSION,
+    format: 'native',
     entrypoint: '@losrc/emdash-plugin-shopify',
     options,
   };
 }
+
+/**
+ * What EmDash calls with the descriptor's options. A site that must replace the purge, the picker
+ * refresher or the environment reader passes `hooks` from a small local module of its own.
+ */
+export function createPlugin(options: ShopifyPluginOptions, hooks: ShopifyPluginHooks = {}) {
+  return definePlugin(buildPluginDefinition(options, hooks));
+}
+
+export default createPlugin;

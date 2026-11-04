@@ -3,6 +3,8 @@
  * or without EmDash. Nothing here imports `emdash`, `astro` or `cloudflare:workers`.
  */
 export { SHOP_DATA_CACHE_TAG } from './cache-tag';
+export { handlePurge } from './purge';
+export type { PurgeTags } from './purge';
 export { DEFAULT_API_VERSION, createShopifyTransport } from './transport';
 export type { ShopifyTransport, ShopifyTransportConfig, StorefrontTokenKind } from './transport';
 export { createStorefrontCartClient, storefrontConfigFromEnv } from './storefront';

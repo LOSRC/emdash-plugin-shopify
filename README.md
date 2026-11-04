@@ -5,9 +5,9 @@ The shop core (`@losrc/emdash-plugin-shopify/core`) works on any Astro site, wit
 A simple, robust Shopify integration for [EmDash](https://emdashcms.com) sites on Cloudflare.
 
 - **Shop core (`/core`):** a Worker-owned cart on the Shopify Storefront API that works without JavaScript, with the cart id kept in the Astro session and never in a URL.
-- **Sync plugin (package root):** an EmDash admin page with a Sync button that links Shopify products to EmDash product entries by Shopify product ID, making drafts for new products and never overwriting editorial content. In development.
+- **Sync plugin (package root):** an EmDash admin page with a Sync button that links Shopify products to EmDash product entries by Shopify product ID, making drafts for new products and never overwriting editorial content.
 
-Status: 0.2.0, in development. First used by christophergoddard.net.
+Status: 0.3.0, in development. First used by christophergoddard.net.
 
 ## Install
 
@@ -133,6 +133,116 @@ if (result.status === 'ok') {
 Only a Storefront token is used, never the Admin API. Shopify answers only for products published to the token's sales channel, so an unpublished product looks the same as an unknown one. Ids are sent to Shopify 250 at a time.
 
 `client.listChannelProducts()` returns `{ id, handle, title }` for every product on the token's sales channel, following pagination. Unlike `readShopData`, it and `client.getProducts(ids)` reject when Shopify fails, so a caller that must not act on a bad answer can stop.
+
+## The sync plugin (EmDash)
+
+The package root is a native EmDash plugin. It adds a **Shopify sync** page to the admin. **Sync now** makes a draft product entry for each product on the sales channel that has no entry yet, lists entries whose product Shopify no longer returns, and refreshes the shop data the site shows. It never changes or deletes an entry, and a second press with nothing new in Shopify changes nothing.
+
+### Install
+
+```ts
+// astro.config.mjs
+import { shopifyPlugin } from '@losrc/emdash-plugin-shopify';
+
+export default defineConfig({
+  integrations: [
+    emdash({
+      plugins: [
+        shopifyPlugin({
+          shop: 'example-shop.myshopify.com', // the one host the plugin may call; not a secret
+          // Optional, with their defaults:
+          // tokenEnv: 'SHOPIFY_STOREFRONT_TOKEN', // Worker env var holding the Storefront token
+          // tokenKind: 'public',                  // 'private' for a private Storefront token
+          // collection: 'products',
+          // idField: 'shopify_product_id',
+          // handleField: 'title',
+          // labelField: 'shopify_title',
+          // productOptions: { blockType: 'product-grid', field: 'products' },
+        }),
+      ],
+    }),
+  ],
+});
+```
+
+Set the token as a Worker secret (`wrangler secret put SHOPIFY_STOREFRONT_TOKEN`). It is read from the Worker environment when a sync runs; it is never in the plugin options, which are serialised into the build. The plugin's only outbound host is `shop`, and every Shopify request goes through EmDash's `ctx.http.fetch`.
+
+Editors need the `content:create` permission (Contributor and up) to open the page and press the button. The same run is available as `POST /_emdash/api/plugins/shopify/sync`, which answers with the report as JSON, for scripts that call it with an API token.
+
+### The Products collection
+
+The collection (default `products`) needs three text fields:
+
+| Field | Holds | Notes |
+|---|---|---|
+| `shopify_product_id` | the numeric Shopify product ID | the link between the entry and Shopify |
+| `title` | the Shopify **handle** | label it "Shopify handle" in the editor. A plugin cannot set a slug, so the sync writes the handle here and EmDash derives the slug from it. The field must be named `title` (or `name`) for that to happen |
+| `shopify_title` | the Shopify title | set as the collection's `titleField`, so it is the admin label |
+
+After creating each draft, the sync checks that its slug equals the handle, and reports any entry where it does not (a clash with another entry's slug, for example).
+
+Shop data (price, images, availability, the handle) is not stored on the entry; pages read it from Shopify with `readShopData`.
+
+### What a run does
+
+1. Lists the products on the sales channel. If Shopify fails, or answers with no products while entries exist, the run stops before it changes anything.
+2. Lists the collection in pages of 100 and picks out the entries that carry a Shopify product ID.
+3. Makes one draft for each channel product with no entry. A draft that cannot be made is a warning; the run carries on.
+4. Reports entries whose product the channel does not return (deleted or unpublished). This is report-only: nothing is written to them.
+5. If configured, adds the product slugs to the product grid's picker.
+6. Purges the `SHOP_DATA_CACHE_TAG` cache tag, once. A failed purge is a warning in the report.
+
+The report is `{ created, flagged, unchanged, warnings }`. The page shows the last run when it opens.
+
+### Refreshing the product picker
+
+A product grid block with a `multiSelect` of products needs its option list to contain the new products' slugs. EmDash's plugin context has no block-type API (`ctx.schema` reads collections only), so set `productOptions: { blockType, field }` and the plugin reaches the block type registry in-process, through `getDb` from `emdash/runtime`, and adds the missing slugs. It only adds options (a compatible change, so no new block type version), and it writes with the fingerprint it read, so a concurrent edit makes it fail with a warning rather than overwrite. This is a schema write made under a `content:create` route, which is why it is off unless you set the option. Without it, run the site's own script after Sync (as `testimonials:sync` does for Creative Care), or pass `refreshProductOptions` in the hooks below.
+
+### Purging the cache after a sync
+
+Pages that show shop data are cached with the `SHOP_DATA_CACHE_TAG` tag (exported from `/core`) and refreshed at once after a sync. There are two ways to purge, and a site picks one:
+
+1. **The plugin route purges directly (default).** The route runs in the same Worker entrypoint that serves the cached pages, so it calls `cache.purge({ tags })` from `cloudflare:workers`. This does not work under `wrangler dev --local` (no Workers cache there); the report then carries a warning and the sync still succeeds.
+2. **The site supplies the purge.** Wrap the plugin in a small local module and pass `purge`; it receives the tag list:
+
+   ```ts
+   // plugins/shopify/index.ts (in the site)
+   import { createPlugin as create, shopifyPlugin, type ShopifyPluginOptions } from '@losrc/emdash-plugin-shopify';
+
+   // astro.config: emdash({ plugins: [localShopifyPlugin({ shop })] })
+   export function localShopifyPlugin(options: ShopifyPluginOptions) {
+     return { ...shopifyPlugin(options), entrypoint: new URL('./index.ts', import.meta.url).pathname };
+   }
+
+   // EmDash loads this named export from the entrypoint.
+   export function createPlugin(options: ShopifyPluginOptions) {
+     return create(options, {
+       purge: async (tags) => { /* the site's mechanism */ },
+       // refreshProductOptions: async (slugs) => { /* add the slugs to the picker */ },
+     });
+   }
+   ```
+
+Either way the site can also mount an editor-only endpoint for purging by hand, backed by the core handler:
+
+```ts
+// src/pages/api/shop/purge.ts
+import { cache } from 'cloudflare:workers';
+import { handlePurge } from '@losrc/emdash-plugin-shopify/core';
+
+export const prerender = false;
+
+export async function POST(context) {
+  if (!context.locals.user) return new Response(null, { status: 403 }); // use the site's own editor check
+  return handlePurge((tags) => cache.purge({ tags }));
+}
+```
+
+`handlePurge(purge)` purges `SHOP_DATA_CACHE_TAG` and nothing else, and answers `200 { purged: true }` or `502` with a fixed message.
+
+### Testing a sync
+
+`runSync` depends on the products capability of the client and on a two-method `ContentStore` (`listLinked`, `createDraft`), so a test drives it with `createFakeCartClient()` from `/core/testing` and an in-memory store, without EmDash or a Worker.
 
 ## Licence
 

@@ -19,6 +19,7 @@ describe('the /core public API', () => {
         'formatMoney',
         'formatPriceRange',
         'handleAdd',
+        'handlePurge',
         'handleRemove',
         'handleSummary',
         'handleUpdate',
