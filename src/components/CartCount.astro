@@ -1,0 +1,49 @@
+---
+import { CART_API_BASE, CART_PAGE_PATH, cartRoutes } from '@losrc/emdash-plugin-shopify/core';
+
+/**
+ * The header's cart link with its item count. Pages are cached and shared, so the count is never in
+ * the HTML: `<cart-count>` fills it from the summary route in the browser. Without JavaScript the
+ * link still goes to /cart/.
+ */
+interface Props {
+  /** The cart page. */
+  href?: string;
+  /** Where the site mounts the cart routes. */
+  apiBase?: string;
+  /** Accessible name; the count is added to it ("Cart, 3 items"). */
+  label?: string;
+  /** Open `<CartDrawer />` instead of navigating, when it is on the page. */
+  openDrawer?: boolean;
+  /** Classes added to the link, after the defaults. */
+  class?: string;
+}
+
+const { href = CART_PAGE_PATH, apiBase = CART_API_BASE, label = 'Cart', openDrawer = false, class: className = '' } = Astro.props;
+const summary = cartRoutes(apiBase).summary;
+---
+
+<a
+  href={href}
+  data-cart-drawer-open={openDrawer ? '' : undefined}
+  class:list={['[--spacing:0.25rem] relative inline-flex items-center p-2 text-stone-900 hover:text-stone-600', className]}
+>
+  <svg aria-hidden="true" viewBox="0 0 24 24" class="size-7" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 4h2l2.4 11.2a1 1 0 0 0 1 .8h8.7a1 1 0 0 0 1-.8L20 8H6.2"></path>
+    <circle cx="9.5" cy="20" r="1.25"></circle>
+    <circle cx="17" cy="20" r="1.25"></circle>
+  </svg>
+  <cart-count src={summary}>
+    <span
+      data-count
+      hidden
+      aria-hidden="true"
+      class="absolute -top-0.5 -right-0.5 flex min-w-5 items-center justify-center rounded-full bg-stone-900 px-1 text-xs font-bold text-white tabular-nums"
+    >0</span>
+    <span data-label class="sr-only">{label}</span>
+  </cart-count>
+</a>
+
+<script>
+  import '@losrc/emdash-plugin-shopify/elements/cart-count';
+</script>
