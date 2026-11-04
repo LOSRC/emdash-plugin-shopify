@@ -4,8 +4,8 @@
  * `App.SessionData` augmentation.
  */
 import type { APIContext } from 'astro';
-import { astroCartSession } from './cart-session';
-import type { StoredCart } from './cart-session';
+import { astroCartSession } from '../core/cart-session';
+import type { StoredCart } from '../core/cart-session';
 
 declare global {
   namespace App {

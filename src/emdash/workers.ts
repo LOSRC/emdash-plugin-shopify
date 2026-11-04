@@ -1,3 +1,4 @@
+import { purgeFailure } from '../core/purge';
 import type { PurgeTags } from '../core/purge';
 
 /**
@@ -21,9 +22,6 @@ export async function readWorkerEnv(): Promise<Record<string, unknown>> {
  */
 export const purgeWorkerCache: PurgeTags = async (tags) => {
   const { cache } = await import('cloudflare:workers');
-  const result = await cache.purge({ tags });
-  if (result && result.success === false) {
-    const reasons = (result.errors ?? []).map((error) => error.message).filter(Boolean);
-    throw new Error(reasons.length > 0 ? reasons.join('; ') : 'the cache reported that the purge failed');
-  }
+  const failure = purgeFailure(await cache.purge({ tags }));
+  if (failure) throw new Error(failure);
 };

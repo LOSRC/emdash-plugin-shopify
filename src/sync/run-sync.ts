@@ -1,6 +1,7 @@
 import { SHOP_DATA_CACHE_TAG } from '../core/cache-tag';
 import type { ShopifyProductsClient } from '../core/client';
 import { productIdOf } from '../core/shop-data';
+import { purgeFailure } from '../core/purge';
 import type { PurgeTags } from '../core/purge';
 import type { ContentStore, FlaggedEntry, LinkedEntry, RefreshProductOptions, SyncReport } from './types';
 
@@ -101,7 +102,8 @@ export async function runSync(deps: SyncDeps): Promise<SyncReport> {
   }
 
   try {
-    await purge([SHOP_DATA_CACHE_TAG]);
+    const failure = purgeFailure(await purge([SHOP_DATA_CACHE_TAG]));
+    if (failure) throw new Error(failure);
   } catch (error) {
     report.warnings.push(
       `The shop-data cache could not be purged (${message(error)}). Pages show the old data until their cache expires.`,

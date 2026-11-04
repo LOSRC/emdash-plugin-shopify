@@ -212,6 +212,17 @@ describe('runSync: warnings', () => {
       'The shop-data cache could not be purged (cache.purge is not a function). Pages show the old data until their cache expires.',
     ]);
   });
+
+  it('reports a purge that resolves success: false as a warning too', async () => {
+    const { shopify, store } = setup();
+    const purge = async () => ({ success: false, errors: [{ code: 1, message: 'rate limited' }] });
+
+    const report = await runSync({ shopify, store, purge });
+
+    expect(report.warnings).toEqual([
+      'The shop-data cache could not be purged (rate limited). Pages show the old data until their cache expires.',
+    ]);
+  });
 });
 
 describe('runSync: the product picker', () => {

@@ -8,7 +8,7 @@ A simple, robust Shopify integration for [EmDash](https://emdashcms.com) sites o
 - **Sync plugin (package root):** an EmDash admin page with a Sync button that links Shopify products to EmDash product entries by Shopify product ID, making drafts for new products and never overwriting editorial content.
 - **Cart UI (`/components/*`, `/elements/*`):** Tailwind 4 Astro components for a `/cart/` page, a slide-out cart drawer and a header count. The page works with no JavaScript; the drawer and count are small custom elements with no framework dependency.
 
-Status: 0.3.0, in development. First used by christophergoddard.net.
+Status: 0.4.0, in development. First used by christophergoddard.net.
 
 ## Install
 
@@ -334,6 +334,17 @@ export async function POST(context) {
 ### Testing a sync
 
 `runSync` depends on the products capability of the client and on a two-method `ContentStore` (`listLinked`, `createDraft`), so a test drives it with `createFakeCartClient()` from `/core/testing` and an in-memory store, without EmDash or a Worker.
+
+## Conventions
+
+House rules that the code follows and a change should keep:
+
+- **Components import the core by package name.** The `.astro` files import from `@losrc/emdash-plugin-shopify/core`, as they do in a site, never by a relative path. The tests alias that name to the source. (The custom elements are bundled, so they import the core's small pure modules by relative path.)
+- **`sideEffects` is an allow-list.** `package.json` lists only `./dist/elements/*`, the modules that register a custom element when imported. Everything else is side-effect free, so a bundler can drop what a site does not use. A new module that does something on import has to be added to the list.
+- **The core imports nothing from the host.** `src/core` has no `emdash`, `astro` or `cloudflare:workers` import, not even a type-only one (the type-level check against Astro's `APIContext` lives in `src/typecheck`). The host-specific code is in `src/emdash`, and it imports `cloudflare:workers` only when a function is called, because Node loads the package root when `astro.config` loads.
+- **The shop is a config option.** `shopifyPlugin({ shop })` takes the shop domain, because the plugin's `allowedHosts` needs it when the config loads, before any Worker environment exists. The site passes `process.env.SHOPIFY_SHOP`. It must be a bare `*.myshopify.com` hostname. The token is not an option: it is read from the Worker environment when a sync runs.
+- **Sync refuses, rather than mass-flags.** If Shopify returns no products for the sales channel while entries are linked (a bad token or an unpublished channel looks like that), the run stops before it writes or purges. Flagging every entry as gone would be the wrong answer to a bad read.
+- **The product-option refresher only adds options.** Removing an option from a block type's select field is a breaking block-type change in EmDash, so the refresher never does it; a slug whose product is gone stays in the list until someone edits the block type.
 
 ## Licence
 

@@ -12,7 +12,7 @@ import type { RefreshProductOptions, SyncReport } from './sync/types';
 /** The plugin's id: an unscoped kebab-case name, also the URL segment under `/_emdash/api/plugins/`. */
 export const PLUGIN_ID = 'shopify';
 /** Kept equal to package.json's version (a test checks). */
-export const PLUGIN_VERSION = '0.3.0';
+export const PLUGIN_VERSION = '0.4.0';
 
 /** Options the site passes in `astro.config`. Serialised into a virtual module: never put a token here. */
 export interface ShopifyPluginOptions extends Partial<ContentFieldNames> {
