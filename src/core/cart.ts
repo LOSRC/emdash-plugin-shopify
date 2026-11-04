@@ -107,8 +107,9 @@ export function toCartView(cart: Cart): CartView {
  * userError whose `field` is `["cartId"]` ("The specified cart does not exist.", code `INVALID`). The
  * code alone is too coarse (`INVALID` covers many refusals), so the field decides. A `cart: null` with
  * no userErrors at all is also read as gone: there is no refusal to report. Any other userError on a
- * null cart is a refusal, and the cart is still there. `getCart` returning `null` is the other signal,
- * and needs no help.
+ * null cart is not settled here: Shopify may flag a lost cart on another field (or none), so the
+ * runtime asks `getCart` before treating it as a refusal. `getCart` returning `null` is the other
+ * signal, and needs no help.
  */
 export function isCartGone(result: CartMutationResult): boolean {
   if (result.cart !== null) return false;

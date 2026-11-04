@@ -40,9 +40,10 @@ export interface FakeCartClient extends ShopifyClient, Pick<FakeCatalogue, 'seed
   /**
    * How a mutation against a cart the fake does not hold is answered. `'userErrors'` (the default) is
    * how Shopify answers a lost cart: `cart: null` plus a userError whose field is `["cartId"]`.
-   * `'null'` is the older bare `{ cart: null, userErrors: [] }`.
+   * `'null'` is the older bare `{ cart: null, userErrors: [] }`. `'fieldless'` is a userError with
+   * `field: null`: a lost cart Shopify does not flag on `cartId` (a completed cart can answer so).
    */
-  answerMissingCartWith(form: 'userErrors' | 'null'): void;
+  answerMissingCartWith(form: 'userErrors' | 'null' | 'fieldless'): void;
 }
 
 export interface FakeClientOptions {
@@ -95,7 +96,7 @@ export function createFakeCartClient(options: FakeClientOptions = {}): FakeCartC
   let lineSeq = 0;
   let pendingError: Error | null = null;
   let rejection: string | null = null;
-  let missingCartForm: 'userErrors' | 'null' = 'userErrors';
+  let missingCartForm: 'userErrors' | 'null' | 'fieldless' = 'userErrors';
 
   /** Throw the armed error if one is pending (one-shot), before any state change. */
   function checkFailure() {
@@ -156,10 +157,11 @@ export function createFakeCartClient(options: FakeClientOptions = {}): FakeCartC
   const catalogue = createFakeCatalogue({ currency, checkFailure });
 
   const ok = (cart: FakeCart): CartMutationResult => ({ cart: render(cart), userErrors: [] });
-  const gone = (): CartMutationResult =>
-    missingCartForm === 'null'
-      ? { cart: null, userErrors: [] }
-      : { cart: null, userErrors: [{ field: ['cartId'], message: 'The specified cart does not exist.', code: 'INVALID' }] };
+  const gone = (): CartMutationResult => {
+    if (missingCartForm === 'null') return { cart: null, userErrors: [] };
+    const field = missingCartForm === 'fieldless' ? null : ['cartId'];
+    return { cart: null, userErrors: [{ field, message: 'The specified cart does not exist.', code: 'INVALID' }] };
+  };
 
   return {
     get carts() {

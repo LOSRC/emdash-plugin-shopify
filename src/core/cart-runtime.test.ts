@@ -628,7 +628,7 @@ describe('a stored cart Shopify no longer resolves is forgotten, so the header c
   });
 });
 
-describe.each(['userErrors', 'null'] as const)('a cart Shopify has lost, answered as %s', (form) => {
+describe.each(['userErrors', 'null', 'fieldless'] as const)('a cart Shopify has lost, answered as %s', (form) => {
   const lost = (): StoredCart => ({
     id: 'gid://shopify/Cart/expired-xyz',
     snapshot: { lineCount: 3, subtotal: '30.00', currency: 'GBP' },
@@ -706,6 +706,16 @@ describe('a refusal on a live cart is not a lost cart', () => {
       const { client, session, state, lineId, before } = await liveCartThatRefuses();
       const res = await handle(postForm({ lineId, quantity: '9' }), client, session);
       expect(res.status).toBe(303);
+      expect(state.current).toEqual(before);
+    }
+  });
+
+  it('answers 502 and keeps the stored cart when Shopify cannot say whether the cart is still there', async () => {
+    for (const handle of [handleAdd, handleUpdate, handleRemove]) {
+      const { client, session, state, lineId, before } = await liveCartThatRefuses();
+      const unreachable = { ...client, getCart: async () => { throw new Error('down'); } };
+      const res = await handle(viewRequest({ lineId, merchandiseId: VARIANT_2, quantity: '9' }), unreachable, session);
+      expect(res.status).toBe(502);
       expect(state.current).toEqual(before);
     }
   });

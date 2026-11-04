@@ -46,6 +46,17 @@ export const CART_REJECTED_MESSAGE = "Sorry, that item couldn't be added to your
 export const CART_UPDATE_REJECTED_MESSAGE =
   "Sorry, we couldn't change your cart. Some items may no longer be available.";
 
+/**
+ * True when a mutation on the stored cart came back with a null cart because the cart is gone. The
+ * userErrors usually say so ({@link isCartGone}); when they name some other field, ask Shopify
+ * directly: a cart that `getCart` no longer resolves is gone, one it still returns refused the change.
+ * Only a null-cart answer costs the extra read.
+ */
+async function cartIsGone(client: ShopifyCartClient, cartId: string, result: CartMutationResult): Promise<boolean> {
+  if (result.cart !== null) return false;
+  return isCartGone(result) || (await client.getCart(cartId)) === null;
+}
+
 /** True when a `fetch` asks for the full {@link CartView} (the drawer) rather than the badge snapshot. */
 function wantsCartView(request: Request): boolean {
   return request.headers.get('x-cart-view') === '1';
@@ -97,7 +108,7 @@ export async function handleAdd(
     result = stored
       ? await client.cartLinesAdd(stored.id, [parsed.value])
       : await client.cartCreate([parsed.value]);
-    if (stored && isCartGone(result)) result = await client.cartCreate([parsed.value]);
+    if (stored && (await cartIsGone(client, stored.id, result))) result = await client.cartCreate([parsed.value]);
   } catch {
     // Shopify transport or GraphQL failure: degrade instead of a raw 500, and leave the existing
     // session snapshot untouched (we never wrote it) so the badge keeps telling the truth.
@@ -149,8 +160,10 @@ async function handleLineMutation<T>(
   if (!stored) return json ? privateJson(emptyCartView()) : redirectToCart();
 
   let result;
+  let gone;
   try {
     result = await op.mutate(client, stored.id, parsed.value);
+    gone = await cartIsGone(client, stored.id, result);
   } catch {
     // No raw 500; the snapshot is left intact.
     return json ? jsonResponse({ error: CART_ERROR_MESSAGE }, 502) : redirectToCartWithError(op.action);
@@ -161,7 +174,7 @@ async function handleLineMutation<T>(
     return json ? privateJson(toCartView(result.cart)) : redirectToCart();
   }
   // A null cart is either a cart Shopify no longer resolves (forget it) or a refusal on a live one.
-  if (isCartGone(result)) {
+  if (gone) {
     session.clear();
     return json ? privateJson(emptyCartView(stored.snapshot.currency)) : redirectToCart();
   }
