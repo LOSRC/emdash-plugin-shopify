@@ -36,5 +36,15 @@ export {
   handleView,
 } from './cart-runtime';
 export { wantsJson, jsonResponse } from './negotiation';
+export {
+  CART_API_BASE,
+  CART_PAGE_PATH,
+  DEFAULT_PRODUCT_PATH,
+  DEFAULT_SHIPPING_NOTE,
+  DEFAULT_VARIANT_TITLE,
+  cartRoutes,
+  productHref,
+  isHttpsUrl,
+} from './cart-defaults';
 export { formatMoney, formatPriceRange } from './money';
 export type { Money, Cart, CartLine, CartMerchandise, CartSnapshot, CartView, CartViewLine } from './types';

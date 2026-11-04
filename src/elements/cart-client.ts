@@ -1,3 +1,4 @@
+import type { CartAction } from '../core/cart-runtime';
 import type { CartView } from '../core/types';
 
 /**
@@ -72,6 +73,19 @@ export async function fetchLineCount(
   } catch {
     return null;
   }
+}
+
+/**
+ * Which cart action a form posts to, or `null` when it posts anywhere else: its resolved `action` has
+ * the same origin and path as one of the cart routes. `pageUrl` resolves relative URLs.
+ */
+export function cartActionOf(formAction: string, urls: Record<CartAction, string>, pageUrl: string): CartAction | null {
+  const target = new URL(formAction, pageUrl);
+  for (const action of ['add', 'update', 'remove'] as const) {
+    const route = new URL(urls[action], pageUrl);
+    if (target.origin === route.origin && target.pathname === route.pathname) return action;
+  }
+  return null;
 }
 
 /** The document event both elements use to stay in step: `detail.lineCount` is the new item count. */

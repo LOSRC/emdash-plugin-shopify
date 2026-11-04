@@ -1,12 +1,15 @@
+import { DEFAULT_PRODUCT_PATH, DEFAULT_VARIANT_TITLE, cartRoutes, isHttpsUrl, productHref } from '../core/cart-defaults';
 import { formatMoney } from '../core/money';
 import type { CartView, CartViewLine } from '../core/types';
-import { CART_CHANGE_EVENT, requestCartView } from './cart-client';
+import { CART_CHANGE_EVENT, cartActionOf, requestCartView } from './cart-client';
 import type { CartChangeDetail, CartOutcome } from './cart-client';
 
 /**
  * `<cart-drawer>`: the slide-out cart. A progressive enhancement: without JavaScript the add-to-cart
  * form posts and lands on /cart/, and this element's markup stays hidden. With it, the drawer
- * intercepts add-to-cart forms, posts them with `fetch`, and slides out showing the cart.
+ * intercepts add-to-cart forms, posts them with `fetch`, and slides out showing the cart. It also
+ * intercepts forms posting to its `update-url` and `remove-url` the same way, wherever they are on the
+ * page; on the /cart/ page the drawer is not rendered, so those forms stay plain posts.
  *
  * It fills markup rendered by `CartDrawer.astro` (a `<dialog>` and a line `<template>`), so every
  * class name lives in the component and the element only toggles, fills and announces.
@@ -84,8 +87,8 @@ export class CartDrawerElement extends HTMLElement {
     return this.querySelector<T>(`[data-${name}]`)!;
   }
 
-  #url(name: 'add' | 'update' | 'remove' | 'view', fallback: string): string {
-    return this.getAttribute(`${name}-url`) ?? fallback;
+  #url(name: 'add' | 'update' | 'remove' | 'view'): string {
+    return this.getAttribute(`${name}-url`) ?? cartRoutes()[name];
   }
 
   // --- opening and closing -----------------------------------------------------------------------
@@ -148,21 +151,27 @@ export class CartDrawerElement extends HTMLElement {
     void this.open();
   };
 
-  // --- add to cart -------------------------------------------------------------------------------
+  // --- form posts on the page --------------------------------------------------------------------
 
+  /** Add, update and remove forms anywhere on the page: sent with `fetch`, answered in the drawer. */
   #onSubmit = (event: SubmitEvent): void => {
     const form = event.target;
     if (!(form instanceof HTMLFormElement) || event.defaultPrevented) return;
     if (form.method.toLowerCase() !== 'post') return;
-    const addUrl = new URL(this.#url('add', '/api/cart/add'), location.href);
-    const action = new URL(form.action, location.href);
-    if (action.origin !== addUrl.origin || action.pathname !== addUrl.pathname) return;
+    const urls = { add: this.#url('add'), update: this.#url('update'), remove: this.#url('remove') };
+    const action = cartActionOf(form.action, urls, location.href);
+    if (!action) return;
 
     event.preventDefault();
     if (this.#busy) return;
     const submitter = event.submitter;
     submitter?.setAttribute('aria-busy', 'true');
-    void this.#send(addUrl.pathname, new FormData(form), { announce: (view) => this.#addedNote(view) }).finally(() => {
+    const announce = {
+      add: (view: CartView) => this.#addedNote(view),
+      update: () => 'Cart updated.',
+      remove: () => 'Item removed from your cart.',
+    }[action];
+    void this.#send(new URL(urls[action], location.href).pathname, new FormData(form), { announce }).finally(() => {
       submitter?.removeAttribute('aria-busy');
     });
   };
@@ -174,7 +183,7 @@ export class CartDrawerElement extends HTMLElement {
     const body = new FormData();
     body.set('lineId', item.dataset.lineId!);
     body.set('quantity', String(quantity));
-    return this.#send(this.#url('update', '/api/cart/update'), body, {
+    return this.#send(this.#url('update'), body, {
       announce: () => `${title}: quantity ${quantity}.`,
       keepFocus: { lineId: item.dataset.lineId!, part },
     });
@@ -184,7 +193,7 @@ export class CartDrawerElement extends HTMLElement {
     const title = this.#titleOf(item);
     const body = new FormData();
     body.set('lineId', item.dataset.lineId!);
-    return this.#send(this.#url('remove', '/api/cart/remove'), body, { announce: () => `${title} removed from your cart.` });
+    return this.#send(this.#url('remove'), body, { announce: () => `${title} removed from your cart.` });
   }
 
   #titleOf(item: HTMLElement): string {
@@ -194,7 +203,7 @@ export class CartDrawerElement extends HTMLElement {
   // --- talking to the server ---------------------------------------------------------------------
 
   async #load(): Promise<void> {
-    await this.#send(this.#url('view', '/api/cart/view'), undefined, {});
+    await this.#send(this.#url('view'), undefined, {});
   }
 
   /** One request at a time: a second tap while one is in flight is ignored, not queued. */
@@ -226,7 +235,7 @@ export class CartDrawerElement extends HTMLElement {
       this.#showError(outcome.message);
       // Show what the cart holds now, if it has never been shown (an add that failed on a fresh page).
       if (!this.#viewLoaded && body) {
-        const reload = await requestCartView(this.#url('view', '/api/cart/view'));
+        const reload = await requestCartView(this.#url('view'));
         if (reload.ok) this.#render(reload.view);
       }
     }
@@ -257,7 +266,7 @@ export class CartDrawerElement extends HTMLElement {
       this.#part('subtotal').textContent = formatMoney(view.subtotal.amount, view.subtotal.currencyCode);
       const checkout = this.#part<HTMLAnchorElement>('checkout');
       // The checkout URL is Shopify's, rendered here and nowhere else; refuse anything but https.
-      checkout.hidden = !/^https:\/\//i.test(view.checkoutUrl);
+      checkout.hidden = !isHttpsUrl(view.checkoutUrl);
       if (!checkout.hidden) checkout.href = view.checkoutUrl;
     }
 
@@ -276,24 +285,23 @@ export class CartDrawerElement extends HTMLElement {
       const el = item.querySelector<HTMLElement>(`[data-${name}]`);
       if (el) el.textContent = value;
     };
-    const handle = encodeURIComponent(line.productHandle);
 
     item.dataset.lineId = line.id;
     item.dataset.lineQuantity = String(line.quantity);
     text('title', line.productTitle);
     text('variant', line.variantTitle);
-    item.querySelector<HTMLElement>('[data-variant]')!.hidden = line.variantTitle === 'Default Title';
+    item.querySelector<HTMLElement>('[data-variant]')!.hidden = line.variantTitle === DEFAULT_VARIANT_TITLE;
     text('price', formatMoney(line.unitPrice.amount, line.unitPrice.currencyCode));
     text('quantity', String(line.quantity));
     text('total', formatMoney(line.lineTotal.amount, line.lineTotal.currencyCode));
-    item.querySelector<HTMLAnchorElement>('a[data-title]')!.href = (this.getAttribute('product-path') ?? '/product/{handle}').replace(
-      '{handle}',
-      handle,
+    item.querySelector<HTMLAnchorElement>('a[data-title]')!.href = productHref(
+      this.getAttribute('product-path') ?? DEFAULT_PRODUCT_PATH,
+      line.productHandle,
     );
 
     const image = item.querySelector<HTMLImageElement>('img[data-image]');
     if (image) {
-      if (line.image && /^https:\/\//i.test(line.image.url)) {
+      if (line.image && isHttpsUrl(line.image.url)) {
         image.src = line.image.url;
         image.alt = line.image.altText ?? '';
       } else {

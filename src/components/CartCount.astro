@@ -1,4 +1,6 @@
 ---
+import { CART_API_BASE, CART_PAGE_PATH, cartRoutes } from '@losrc/emdash-plugin-shopify/core';
+
 /**
  * The header's cart link with its item count. Pages are cached and shared, so the count is never in
  * the HTML: `<cart-count>` fills it from the summary route in the browser. Without JavaScript the
@@ -17,8 +19,8 @@ interface Props {
   class?: string;
 }
 
-const { href = '/cart/', apiBase = '/api/cart', label = 'Cart', openDrawer = false, class: className = '' } = Astro.props;
-const summary = `${apiBase.replace(/\/$/, '')}/summary`;
+const { href = CART_PAGE_PATH, apiBase = CART_API_BASE, label = 'Cart', openDrawer = false, class: className = '' } = Astro.props;
+const summary = cartRoutes(apiBase).summary;
 ---
 
 <a

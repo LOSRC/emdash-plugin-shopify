@@ -2,6 +2,7 @@ import { parseLineForm, parseUpdateForm, parseRemoveForm, toSnapshot, toCartView
 import type { ParseResult } from './cart';
 import type { CartMutationResult, ShopifyCartClient } from './client';
 import type { CartSession } from './cart-session';
+import { CART_PAGE_PATH } from './cart-defaults';
 import { wantsJson, jsonResponse, privateJson, readFormBody, unreadableBodyResponse } from './negotiation';
 import type { CartView } from './types';
 
@@ -20,7 +21,7 @@ import type { CartView } from './types';
 export type CartAction = 'add' | 'update' | 'remove';
 
 /** Where every mutating action sends the no-JS <form> POST back to. */
-export const CART_PATH = '/cart/';
+export const CART_PATH = CART_PAGE_PATH;
 
 /**
  * The user-facing message when Shopify can't be reached. Deliberately generic: the raw transport or

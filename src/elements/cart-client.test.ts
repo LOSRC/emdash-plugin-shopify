@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { fetchLineCount, requestCartView, GENERIC_ERROR } from './cart-client';
+import { cartActionOf, fetchLineCount, requestCartView, GENERIC_ERROR } from './cart-client';
 import type { FetchLike } from './cart-client';
 import { handleAdd, handleRemove, CART_REJECTED_MESSAGE } from '../core/cart-runtime';
 import type { CartSession, StoredCart } from '../core/cart-session';
@@ -99,5 +99,22 @@ describe('fetchLineCount', () => {
     expect(await fetchLineCount('/s', async () => new Response('', { status: 500 }))).toBeNull();
     expect(await fetchLineCount('/s', async () => Response.json({ nope: 1 }))).toBeNull();
     expect(await fetchLineCount('/s', async () => { throw new Error('offline'); })).toBeNull();
+  });
+});
+
+describe('cartActionOf', () => {
+  const urls = { add: '/api/cart/add', update: '/api/cart/update', remove: '/api/cart/remove' };
+  const page = 'https://example.com/product/mug';
+
+  it('recognises a form posting to the add, update or remove route', () => {
+    expect(cartActionOf('/api/cart/add', urls, page)).toBe('add');
+    expect(cartActionOf('https://example.com/api/cart/update', urls, page)).toBe('update');
+    expect(cartActionOf('/api/cart/remove?x=1', urls, page)).toBe('remove');
+  });
+
+  it('ignores any other path or another origin', () => {
+    expect(cartActionOf('/api/cart/summary', urls, page)).toBeNull();
+    expect(cartActionOf('/somewhere/else', urls, page)).toBeNull();
+    expect(cartActionOf('https://evil.example.org/api/cart/add', urls, page)).toBeNull();
   });
 });

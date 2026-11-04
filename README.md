@@ -209,9 +209,11 @@ try {
 <CartPage cart={cart} loadFailed={loadFailed} actionFailed={Astro.url.searchParams.has('error')} />
 ```
 
-**Drawer.** Render `<CartDrawer />` once in the layout, but not on the `/cart/` page. It brings its own script. It enhances every `<form method="post" action="/api/cart/add">` on the page: the add is sent with `fetch` and the drawer slides out. Without JavaScript those forms post as usual and land on `/cart/`. Any element with a `data-cart-drawer-open` attribute opens it too. The drawer is a native modal `<dialog>` (dialog role, focus trapped, Escape and the backdrop close it, focus returns to the button that opened it), with a polite live region for "Added to your cart", quantity changes and removals. At quantity 1 the minus button removes the line.
+**Drawer.** Render `<CartDrawer />` once in the layout, but not on the `/cart/` page. It brings its own script. It enhances every `<form method="post">` on the page that posts to `/api/cart/add`, `/api/cart/update` or `/api/cart/remove`: the form is sent with `fetch` and the drawer slides out showing the refreshed cart. Without JavaScript those forms post as usual and land on `/cart/`. On the `/cart/` page itself the drawer is not rendered, so its update and remove forms stay plain posts (the page works with no JavaScript, and a reload shows the result). Any element with a `data-cart-drawer-open` attribute opens it too. The drawer is a native modal `<dialog>` (dialog role, focus trapped, Escape and the backdrop close it, focus returns to the button that opened it), with a polite live region for "Added to your cart", quantity changes and removals. At quantity 1 the minus button removes the line.
 
 **Count.** `<CartCount />` renders the link to `/cart/`; the `<cart-count>` element inside fills the number from `GET /api/cart/summary` once per page view, so it is right on cached pages. `<CartCount openDrawer />` makes the link open the drawer when one is on the page.
+
+The checkout link and product images are only rendered when their URL is `https:` (the drawer and `CartPage` use the same check, `isHttpsUrl` from `/core`). The defaults the components share (`CART_API_BASE`, `cartRoutes`, `DEFAULT_PRODUCT_PATH`, `DEFAULT_SHIPPING_NOTE`, `DEFAULT_VARIANT_TITLE`) are exported from `/core` too.
 
 The elements talk to each other through a `shopify-cart:change` event on `document` (`detail.lineCount`), so a site script can listen to it too.
 

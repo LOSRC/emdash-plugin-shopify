@@ -1,3 +1,4 @@
+import { cartRoutes } from '../core/cart-defaults';
 import { CART_CHANGE_EVENT, fetchLineCount } from './cart-client';
 import type { CartChangeDetail } from './cart-client';
 
@@ -9,7 +10,7 @@ import type { CartChangeDetail } from './cart-client';
  * Markup it expects (rendered by `CartCount.astro`): a `[data-count]` badge, hidden while the count is
  * zero, and a `[data-label]` visually-hidden label, whose text is kept as the base for "Cart, 3 items".
  *
- * Attribute: `src`, the summary route (default `/api/cart/summary`).
+ * Attribute: `src`, the summary route (default: the summary route under `/api/cart`).
  */
 export class CartCountElement extends HTMLElement {
   #label = '';
@@ -27,7 +28,7 @@ export class CartCountElement extends HTMLElement {
   }
 
   async #refresh(): Promise<void> {
-    const count = await fetchLineCount(this.getAttribute('src') ?? '/api/cart/summary');
+    const count = await fetchLineCount(this.getAttribute('src') ?? cartRoutes().summary);
     if (count !== null) this.#show(count);
   }
 

@@ -75,6 +75,35 @@ describe('CartPage (no JavaScript)', () => {
   });
 });
 
+describe('CartPage link checks', () => {
+  it('renders only https checkout and image URLs, as the drawer does', async () => {
+    const cart = await sampleCart();
+    const unsafe = {
+      ...cart,
+      checkoutUrl: 'javascript:alert(1)',
+      lines: cart.lines.map((line) => ({ ...line, image: { url: 'http://cdn.example.com/a.jpg', altText: null } })),
+    };
+    const html = await render(CartPage, { cart: unsafe });
+
+    expect(html).not.toContain('javascript:');
+    expect(html).not.toContain('Checkout');
+    expect(html).not.toContain('<img');
+    expect(html).toContain('£29.98');
+  });
+
+  it('keeps an https image and checkout link', async () => {
+    const cart = await sampleCart();
+    const safe = {
+      ...cart,
+      lines: cart.lines.map((line) => ({ ...line, image: { url: 'https://cdn.example.com/a.jpg', altText: 'A mug' } })),
+    };
+    const html = await render(CartPage, { cart: safe });
+
+    expect(html).toContain('src="https://cdn.example.com/a.jpg"');
+    expect(html).toContain(`href="${cart.checkoutUrl}"`);
+  });
+});
+
 describe('CartCount', () => {
   it('links to the cart page with the count left to the browser', async () => {
     const html = await render(CartCount);

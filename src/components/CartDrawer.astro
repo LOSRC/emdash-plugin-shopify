@@ -1,12 +1,22 @@
 ---
+import {
+  CART_API_BASE,
+  CART_PAGE_PATH,
+  DEFAULT_PRODUCT_PATH,
+  DEFAULT_SHIPPING_NOTE,
+  cartRoutes,
+} from '@losrc/emdash-plugin-shopify/core';
+
 /**
  * The slide-out cart. Render it once, in the site layout, and import nothing else: the component
  * brings its own `<cart-drawer>` element script. Without JavaScript it stays hidden and add-to-cart
  * forms post and land on /cart/.
  *
- * It enhances any `<form method="post" action="{apiBase}/add">` on the page, and opens from any
+ * It enhances any `<form method="post">` on the page whose action is `{apiBase}/add`, `/update` or
+ * `/remove`: the form is sent with `fetch` and the drawer shows the refreshed cart. It opens from any
  * element with a `data-cart-drawer-open` attribute (for example `<CartCount openDrawer />`).
- * Do not render it on the /cart/ page itself.
+ * Do not render it on the /cart/ page itself: there the update and remove forms stay plain posts,
+ * which work with no JavaScript and land back on /cart/.
  */
 interface Props {
   /** Where the site mounts the cart routes (add, update, remove, view). */
@@ -24,22 +34,22 @@ interface Props {
 }
 
 const {
-  apiBase = '/api/cart',
-  cartPath = '/cart/',
-  productPath = '/product/{handle}',
-  shippingNote = 'Free shipping (UK)',
+  apiBase = CART_API_BASE,
+  cartPath = CART_PAGE_PATH,
+  productPath = DEFAULT_PRODUCT_PATH,
+  shippingNote = DEFAULT_SHIPPING_NOTE,
   title = 'Your cart',
   class: className = '',
 } = Astro.props;
 
-const base = apiBase.replace(/\/$/, '');
+const routes = cartRoutes(apiBase);
 ---
 
 <cart-drawer
-  add-url={`${base}/add`}
-  update-url={`${base}/update`}
-  remove-url={`${base}/remove`}
-  view-url={`${base}/view`}
+  add-url={routes.add}
+  update-url={routes.update}
+  remove-url={routes.remove}
+  view-url={routes.view}
   product-path={productPath}
 >
   <dialog
