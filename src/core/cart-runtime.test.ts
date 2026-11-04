@@ -12,14 +12,14 @@ import { createFakeCartClient } from './testing';
 import type { CartSession, StoredCart } from './cart-session';
 
 /**
- * Cart orchestration behaviour (issue #58), driven end-to-end through the public seam: the four
+ * Cart orchestration behaviour, driven end-to-end through the public seam: the four
  * `handle*` entry points, the in-memory `ShopifyCartClient` fake, and an in-memory `CartSession`.
  * The assertions are on observable outcomes (the written snapshot, the cart id, the HTTP response),
  * never on internal calls - so they survive a refactor of how the orchestration is wired.
  */
 
-const VARIANT = 'gid://shopify/ProductVariant/40993523892280';
-const VARIANT_2 = 'gid://shopify/ProductVariant/40993523925048';
+const VARIANT = 'gid://shopify/ProductVariant/10000000001';
+const VARIANT_2 = 'gid://shopify/ProductVariant/10000000002';
 
 /** An in-memory CartSession that records what was written, standing in for the Astro session. */
 function memorySession(initial?: StoredCart) {
@@ -242,7 +242,7 @@ describe('snapshot is written on every mutation', () => {
   });
 });
 
-describe('graceful degradation when Shopify fails (#60)', () => {
+describe('graceful degradation when Shopify fails', () => {
   const EXISTING: StoredCart = {
     id: 'gid://shopify/Cart/live',
     snapshot: { lineCount: 4, subtotal: '400.00', currency: 'GBP' },
@@ -348,7 +348,7 @@ describe('add rejected by Shopify (cart: null + userErrors) - a failure, never a
 
 
 describe('no cart id in any URL the handlers produce', () => {
-  const CART_ID_PATTERN = /gid:\/\/shopify\/Cart\/|fake-\d/;
+  const CART_GID = 'gid://shopify/Cart/';
 
   it('keeps the cart id out of every redirect and JSON body, on success and on failure', async () => {
     const client = createFakeCartClient();
@@ -358,6 +358,7 @@ describe('no cart id in any URL the handlers produce', () => {
     responses.push(await handleAdd(postForm({ merchandiseId: VARIANT, quantity: '2' }), client, session));
     responses.push(await handleAdd(postForm({ merchandiseId: VARIANT }, { json: true }), client, session));
     const cartId = state.current!.id;
+    const cartToken = cartId.split('/').pop()!;
     const lineId = onlyCart(client).lines.nodes[0]!.id;
     responses.push(await handleUpdate(postForm({ lineId, quantity: '3' }), client, session));
     responses.push(await handleSummary(session));
@@ -375,11 +376,12 @@ describe('no cart id in any URL the handlers produce', () => {
 
     for (const res of responses) {
       const location = res.headers.get('location') ?? '';
+      // The acceptance criterion is about URLs: neither the full id nor its token may appear.
       expect(location).not.toContain(cartId);
-      expect(location).not.toMatch(CART_ID_PATTERN);
+      expect(location).not.toContain(cartToken);
+      // Bodies must not carry the cart GID either (line ids are not cart ids and may appear later).
       const body = await res.text();
-      expect(body).not.toContain(cartId);
-      expect(body).not.toMatch(CART_ID_PATTERN);
+      expect(body).not.toContain(CART_GID);
     }
     // And the responses really did exercise redirects, not just empty bodies.
     expect(responses.filter((res) => res.headers.has('location')).length).toBeGreaterThan(3);

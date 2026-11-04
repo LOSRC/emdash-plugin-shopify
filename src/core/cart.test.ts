@@ -12,7 +12,7 @@ function form(fields: Record<string, string>): FormData {
   return fd;
 }
 
-const VARIANT = 'gid://shopify/ProductVariant/40993523892280';
+const VARIANT = 'gid://shopify/ProductVariant/10000000001';
 const LINE = 'gid://shopify/CartLine/7b9ed49f-830e-4142-9c81-e7f8249863ad?cart=50b74bf9dc2bc7a410053b5ffb31ba51';
 
 describe('parseLineForm', () => {

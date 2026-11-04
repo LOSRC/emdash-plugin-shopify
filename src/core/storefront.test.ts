@@ -6,7 +6,7 @@ import type { CartSession, StoredCart } from './cart-session';
 import cartFixture from './fixtures/cart.json';
 
 const SHOP = 'example-shop.myshopify.com';
-const VARIANT = 'gid://shopify/ProductVariant/40993523892280';
+const VARIANT = 'gid://shopify/ProductVariant/10000000001';
 
 interface Recorded {
   url: string;

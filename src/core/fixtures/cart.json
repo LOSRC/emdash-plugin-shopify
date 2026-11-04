@@ -13,7 +13,7 @@
         "quantity": 2,
         "cost": { "totalAmount": { "amount": "36.00", "currencyCode": "GBP" } },
         "merchandise": {
-          "id": "gid://shopify/ProductVariant/40993523892280",
+          "id": "gid://shopify/ProductVariant/10000000001",
           "title": "A3 print",
           "price": { "amount": "18.00", "currencyCode": "GBP" },
           "product": { "title": "Harbour at dusk", "handle": "harbour-at-dusk" },
@@ -25,7 +25,7 @@
         "quantity": 1,
         "cost": { "totalAmount": { "amount": "10.00", "currencyCode": "GBP" } },
         "merchandise": {
-          "id": "gid://shopify/ProductVariant/40993523925048",
+          "id": "gid://shopify/ProductVariant/10000000002",
           "title": "Default Title",
           "price": { "amount": "10.00", "currencyCode": "GBP" },
           "product": { "title": "Field guide", "handle": "field-guide" },
