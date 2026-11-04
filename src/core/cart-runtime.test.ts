@@ -8,7 +8,7 @@ import {
   CART_ERROR_MESSAGE,
   CART_REJECTED_MESSAGE,
   CART_UPDATE_REJECTED_MESSAGE,
-  handleCart,
+  handleView,
 } from './cart-runtime';
 import { createFakeCartClient } from './testing';
 import type { CartSession, StoredCart } from './cart-session';
@@ -537,13 +537,13 @@ describe('handleUpdate / handleRemove - JSON', () => {
   });
 });
 
-describe('handleCart (GET the cart view)', () => {
+describe('handleView (GET the cart view)', () => {
   it('returns the stored cart as a private CartView', async () => {
     const client = createFakeCartClient({ prices: { [VARIANT]: '18.00' } });
     const { session } = memorySession();
     await handleAdd(postForm({ merchandiseId: VARIANT, quantity: '2' }), client, session);
 
-    const res = await handleCart(client, session);
+    const res = await handleView(client, session);
 
     expect(res.status).toBe(200);
     expect(res.headers.get('cache-control')).toBe('private, no-store');
@@ -552,13 +552,13 @@ describe('handleCart (GET the cart view)', () => {
 
   it('returns an empty view when there is no cart, and when Shopify no longer resolves it', async () => {
     const client = createFakeCartClient();
-    expect(await (await handleCart(client, memorySession().session)).json()).toMatchObject({ lineCount: 0, lines: [] });
+    expect(await (await handleView(client, memorySession().session)).json()).toMatchObject({ lineCount: 0, lines: [] });
 
     const stale: StoredCart = {
       id: 'gid://shopify/Cart/expired-xyz',
       snapshot: { lineCount: 5, subtotal: '100.00', currency: 'GBP' },
     };
-    const res = await handleCart(client, memorySession(stale).session);
+    const res = await handleView(client, memorySession(stale).session);
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ lineCount: 0, lines: [] });
   });
@@ -571,10 +571,11 @@ describe('handleCart (GET the cart view)', () => {
     });
     client.failNextWith(new Error('boom'));
 
-    const res = await handleCart(client, session);
+    const res = await handleView(client, session);
 
     expect(res.status).toBe(502);
     expect(await res.json()).toEqual({ error: CART_ERROR_MESSAGE });
+    expect(res.headers.get('cache-control')).toBe('private, no-store');
   });
 });
 
@@ -591,7 +592,7 @@ describe('the cart id stays out of the cart view responses', () => {
     const { session, state } = memorySession();
     const responses = [
       await handleAdd(viewRequest({ merchandiseId: VARIANT }), client, session),
-      await handleCart(client, session),
+      await handleView(client, session),
     ];
     const lineId = onlyCart(client).lines.nodes[0]!.id;
     responses.push(await handleUpdate(viewRequest({ lineId, quantity: '2' }), client, session));
@@ -602,5 +603,74 @@ describe('the cart id stays out of the cart view responses', () => {
       expect(res.headers.get('location')).toBeNull();
     }
     expect(state.current!.id).toContain('Cart');
+  });
+});
+
+/** A POST carrying a JSON body, as a script (not a <form>) would send it. */
+function postJson(body: string, headers: Record<string, string> = {}): Request {
+  return new Request('https://example.com/api/cart', {
+    method: 'POST',
+    body,
+    headers: { 'content-type': 'application/json', ...headers },
+  });
+}
+
+describe('request bodies: forms and JSON', () => {
+  it('add accepts a JSON body, answering JSON because the caller sent JSON', async () => {
+    const client = createFakeCartClient({ prices: { [VARIANT]: '18.00' } });
+    const { session, state } = memorySession();
+
+    const res = await handleAdd(postJson(JSON.stringify({ merchandiseId: VARIANT, quantity: 2 })), client, session);
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ lineCount: 2 });
+    expect(state.current!.snapshot.lineCount).toBe(2);
+  });
+
+  it('update and remove accept JSON bodies', async () => {
+    const client = createFakeCartClient({ prices: { [VARIANT]: '18.00' } });
+    const { session } = memorySession();
+    await handleAdd(postForm({ merchandiseId: VARIANT, quantity: '2' }), client, session);
+    const lineId = onlyCart(client).lines.nodes[0]!.id;
+
+    const updated = await handleUpdate(postJson(JSON.stringify({ lineId, quantity: 5 })), client, session);
+    expect(updated.status).toBe(200);
+    expect(await updated.json()).toMatchObject({ lineCount: 5 });
+
+    const removed = await handleRemove(postJson(JSON.stringify({ lineId })), client, session);
+    expect(removed.status).toBe(200);
+    expect(await removed.json()).toMatchObject({ lineCount: 0, lines: [] });
+  });
+
+  it('answers invalid JSON fields with the same 400 as an invalid form', async () => {
+    const client = createFakeCartClient();
+    const res = await handleAdd(postJson(JSON.stringify({ merchandiseId: 'nope' })), client, memorySession().session);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'merchandiseId must be a ProductVariant GID' });
+  });
+
+  it.each([
+    ['malformed JSON', () => postJson('{not json')],
+    ['a JSON array', () => postJson('[1,2]')],
+    ['a JSON string', () => postJson('"hello"')],
+    ['null', () => postJson('null')],
+    [
+      'a broken multipart body',
+      () =>
+        new Request('https://example.com/api/cart', {
+          method: 'POST',
+          body: 'not multipart',
+          headers: { 'content-type': 'multipart/form-data; boundary=xyz' },
+        }),
+    ],
+  ])('answers %s with a friendly 400, never a raw 500, on every handler', async (_name, make) => {
+    const client = createFakeCartClient();
+    for (const handler of [handleAdd, handleUpdate, handleRemove]) {
+      const { session, state } = memorySession();
+      const res = await handler(make(), client, session);
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ error: 'The request body could not be read.' });
+      expect(state.writes).toBe(0);
+    }
   });
 });

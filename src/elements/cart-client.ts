@@ -2,7 +2,7 @@ import type { CartView } from '../core/types';
 
 /**
  * The browser side of the cart JSON contract, shared by `<cart-drawer>` and `<cart-count>`. It talks to
- * the site's cart routes (see the core's `handleAdd`, `handleUpdate`, `handleRemove`, `handleCart` and
+ * the site's cart routes (see the core's `handleAdd`, `handleUpdate`, `handleRemove`, `handleView` and
  * `handleSummary`) and turns every outcome into a value the elements can render: never a throw.
  */
 

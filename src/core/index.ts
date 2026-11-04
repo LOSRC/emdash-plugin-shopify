@@ -24,6 +24,7 @@ export { parseLineForm, parseUpdateForm, parseRemoveForm, toSnapshot, toCartView
 export type { CartLineInput, CartLineUpdate, ParseResult } from './cart';
 export { astroCartSession } from './cart-session';
 export type { CartSession, StoredCart, AstroSessionLike } from './cart-session';
+export type { CartAction } from './cart-runtime';
 export {
   CART_PATH,
   CART_ERROR_MESSAGE,
@@ -32,7 +33,7 @@ export {
   handleUpdate,
   handleRemove,
   handleSummary,
-  handleCart,
+  handleView,
 } from './cart-runtime';
 export { wantsJson, jsonResponse } from './negotiation';
 export { formatMoney, formatPriceRange } from './money';

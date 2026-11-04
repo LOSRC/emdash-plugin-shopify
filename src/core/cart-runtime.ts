@@ -2,7 +2,7 @@ import { parseLineForm, parseUpdateForm, parseRemoveForm, toSnapshot, toCartView
 import type { ParseResult } from './cart';
 import type { CartMutationResult, ShopifyCartClient } from './client';
 import type { CartSession } from './cart-session';
-import { wantsJson, jsonResponse } from './negotiation';
+import { wantsJson, jsonResponse, privateJson, readFormBody, unreadableBodyResponse } from './negotiation';
 import type { CartView } from './types';
 
 /**
@@ -15,6 +15,9 @@ import type { CartView } from './types';
  * Responses are built explicitly (not via `context.redirect`) so a redirect is just a 303 with a
  * `Location`, assertable in a unit test. No cart id is ever put in a `Location` or a response body.
  */
+
+/** The three cart-changing routes; also what `/cart/?error=` names. */
+export type CartAction = 'add' | 'update' | 'remove';
 
 /** Where every mutating action sends the no-JS <form> POST back to. */
 export const CART_PATH = '/cart/';
@@ -40,19 +43,6 @@ export const CART_REJECTED_MESSAGE = "Sorry, that item couldn't be added to your
 export const CART_UPDATE_REJECTED_MESSAGE =
   "Sorry, we couldn't change your cart. Some items may no longer be available.";
 
-/**
- * Response headers for anything carrying the visitor's cart. The count element and the drawer fetch
- * these precisely because pages are cached and shared, so the answers themselves must never be.
- */
-const PRIVATE = { 'Cache-Control': 'private, no-store' };
-
-/** A cart view (or summary) as JSON, marked private. Carries `checkoutUrl`, so it must not be cached. */
-function privateJson(body: unknown, status = 200): Response {
-  const res = jsonResponse(body, status);
-  for (const [name, value] of Object.entries(PRIVATE)) res.headers.set(name, value);
-  return res;
-}
-
 /** True when a `fetch` asks for the full {@link CartView} (the drawer) rather than the badge snapshot. */
 function wantsCartView(request: Request): boolean {
   return request.headers.get('x-cart-view') === '1';
@@ -69,7 +59,7 @@ function redirectToCart(): Response {
 }
 
 /** No-JS failure degrade: 303 to /cart/?error=<action>, which renders a visible error banner. */
-function redirectToCartWithError(action: string): Response {
+function redirectToCartWithError(action: CartAction): Response {
   return new Response(null, { status: 303, headers: { Location: `${CART_PATH}?error=${action}` } });
 }
 
@@ -86,7 +76,9 @@ export async function handleAdd(
   session: CartSession,
 ): Promise<Response> {
   const json = wantsJson(request);
-  const parsed = parseLineForm(await request.formData());
+  const form = await readFormBody(request);
+  if (!form) return unreadableBodyResponse();
+  const parsed = parseLineForm(form);
   if (!parsed.ok) {
     return json ? jsonResponse({ error: parsed.error }, 400) : redirectToCart();
   }
@@ -140,11 +132,13 @@ async function handleLineMutation<T>(
   op: {
     parse: (form: FormData) => ParseResult<T>;
     mutate: (client: ShopifyCartClient, cartId: string, value: T) => Promise<CartMutationResult>;
-    action: string;
+    action: CartAction;
   },
 ): Promise<Response> {
   const json = wantsJson(request);
-  const parsed = op.parse(await request.formData());
+  const form = await readFormBody(request);
+  if (!form) return unreadableBodyResponse();
+  const parsed = op.parse(form);
   if (!parsed.ok) return json ? jsonResponse({ error: parsed.error }, 400) : redirectToCart();
 
   const stored = await session.read();
@@ -216,14 +210,14 @@ export async function handleSummary(session: CartSession): Promise<Response> {
  * what the drawer shows when it is opened without a mutation. No stored cart, or one Shopify no
  * longer resolves, is an empty view. A Shopify failure is a 502 `{ error }`.
  */
-export async function handleCart(client: ShopifyCartClient, session: CartSession): Promise<Response> {
+export async function handleView(client: ShopifyCartClient, session: CartSession): Promise<Response> {
   const stored = await session.read();
   if (!stored) return privateJson(emptyCartView());
   let cart;
   try {
     cart = await client.getCart(stored.id);
   } catch {
-    return jsonResponse({ error: CART_ERROR_MESSAGE }, 502);
+    return privateJson({ error: CART_ERROR_MESSAGE }, 502);
   }
   return privateJson(cart ? toCartView(cart) : emptyCartView(stored.snapshot.currency));
 }

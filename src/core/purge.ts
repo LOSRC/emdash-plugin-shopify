@@ -1,5 +1,5 @@
 import { SHOP_DATA_CACHE_TAG } from './cache-tag';
-import { jsonResponse } from './negotiation';
+import { privateJson } from './negotiation';
 
 /** Invalidates cache tags. Resolves once the purge is requested; rejects when it failed. */
 export type PurgeTags = (tags: string[]) => Promise<void>;
@@ -12,7 +12,7 @@ export type PurgeTags = (tags: string[]) => Promise<void>;
  * ```ts
  * export const POST = async (context) => {
  *   if (!isEditor(context)) return new Response(null, { status: 403 });
- *   return handlePurge(({ tags }) => cache.purge({ tags }));
+ *   return handlePurge((tags) => cache.purge({ tags }));
  * };
  * ```
  *
@@ -23,12 +23,7 @@ export async function handlePurge(purge: PurgeTags): Promise<Response> {
   try {
     await purge([SHOP_DATA_CACHE_TAG]);
   } catch {
-    return noStore(jsonResponse({ purged: false, error: 'The shop-data cache could not be purged.' }, 502));
+    return privateJson({ purged: false, error: 'The shop-data cache could not be purged.' }, 502);
   }
-  return noStore(jsonResponse({ purged: true, tags: [SHOP_DATA_CACHE_TAG] }));
-}
-
-function noStore(response: Response): Response {
-  response.headers.set('Cache-Control', 'no-store');
-  return response;
+  return privateJson({ purged: true, tags: [SHOP_DATA_CACHE_TAG] });
 }

@@ -91,7 +91,7 @@ export function GET(context: APIContext): Promise<Response> {
 }
 ```
 
-The handlers serve two callers from one endpoint. A plain `<form method="POST">` gets a `303` to `/cart/` (or to `/cart/?error=add|update|remove` when something went wrong). A `fetch` that sends `Accept: application/json` or `X-Requested-With: fetch` gets JSON; see [the JSON contract](#the-json-contract). The cart id is never put in a redirect or a response body. `CART_ERROR_MESSAGE` and `CART_REJECTED_MESSAGE` are the friendly texts for the error banner.
+The handlers serve two callers from one endpoint. A plain `<form method="POST">` gets a `303` to `/cart/` (or to `/cart/?error=add|update|remove` when something went wrong). A `fetch` that sends `Accept: application/json` or `X-Requested-With: fetch`, or any request with a JSON body, gets JSON; see [the JSON contract](#the-json-contract). The cart id is never put in a redirect or a response body. `CART_ERROR_MESSAGE` and `CART_REJECTED_MESSAGE` are the friendly texts for the error banner.
 
 ### The JSON contract
 
@@ -99,22 +99,24 @@ The handlers serve two callers from one endpoint. A plain `<form method="POST">`
 |---|---|
 | `POST /api/cart/add` | the snapshot `{ lineCount, subtotal, currency }`; with `X-Cart-View: 1` as well, the `CartView` |
 | `POST /api/cart/update`, `POST /api/cart/remove` | the refreshed `CartView` |
-| `GET /api/cart/view` (`handleCart`) | the stored cart as a `CartView`, fresh from Shopify |
+| `GET /api/cart/view` (`handleView`) | the stored cart as a `CartView`, fresh from Shopify |
 | `GET /api/cart/summary` | `{ lineCount }` from the session, with no Shopify round trip |
 
-A `CartView` is `{ lineCount, subtotal: { amount, currencyCode }, checkoutUrl, lines: [{ id, quantity, productTitle, productHandle, variantTitle, unitPrice, lineTotal, image }] }`. A cart that does not exist (none started, or Shopify no longer has it) is an empty view: `lines: []`, `checkoutUrl: ''`. Failures are `{ error }`: `400` for invalid input, `422` when Shopify refuses the change, `502` when Shopify cannot be reached. Nothing is written to the session on a failure. Every response that carries the cart (`CartView` and summary) is sent `Cache-Control: private, no-store`, because `checkoutUrl` carries Shopify's cart token and the count exists precisely because pages are cached and shared.
+A `CartView` is `{ lineCount, subtotal: { amount, currencyCode }, checkoutUrl, lines: [{ id, quantity, productTitle, productHandle, variantTitle, unitPrice, lineTotal, image }] }`. A cart that does not exist (none started, or Shopify no longer has it) is an empty view: `lines: []`, `checkoutUrl: ''`. Failures are `{ error }`: `400` for invalid input, `422` when Shopify refuses the change, `502` when Shopify cannot be reached. Nothing is written to the session on a failure. Every response from the view and summary routes, and every `CartView`, is sent `Cache-Control: private, no-store` (so is the purge endpoint's answer), because `checkoutUrl` carries Shopify's cart token and the count exists precisely because pages are cached and shared.
 
-`handleCart(client, session)` is the one new route to mount for the drawer:
+`handleView(client, session)` is the one new route to mount for the drawer:
 
 ```ts
 // src/pages/api/cart/view.ts
 export function GET(context: APIContext): Promise<Response> {
   const client = createStorefrontCartClient(storefrontConfigFromEnv(env));
-  return handleCart(client, astroCartSession(context.session));
+  return handleView(client, astroCartSession(context.session));
 }
 ```
 
 ### Forms
+
+Every action reads its fields from a form body (`application/x-www-form-urlencoded` or `multipart/form-data`) or from a JSON object (`Content-Type: application/json`, e.g. `{ "lineId": "...", "quantity": 2 }`). A body that cannot be read at all is a `400` with `{ error: 'The request body could not be read.' }`.
 
 | Action | Field names |
 |---|---|

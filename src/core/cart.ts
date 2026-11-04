@@ -31,6 +31,15 @@ function parseQuantity(raw: FormDataEntryValue | null, fallback: number): number
   return Number.isInteger(quantity) && quantity >= 1 ? quantity : null;
 }
 
+/** Validate the `lineId` field shared by update and remove: a CartLine GID. */
+function parseLineId(form: FormData): ParseResult<string> {
+  const lineId = form.get('lineId');
+  if (typeof lineId !== 'string' || !CART_LINE_GID.test(lineId)) {
+    return { ok: false, error: 'lineId must be a CartLine GID' };
+  }
+  return { ok: true, value: lineId };
+}
+
 /** Validate a zero-JS add-to-cart form POST: a ProductVariant GID and an optional quantity (default 1). */
 export function parseLineForm(form: FormData): ParseResult<CartLineInput> {
   const merchandiseId = form.get('merchandiseId');
@@ -44,22 +53,17 @@ export function parseLineForm(form: FormData): ParseResult<CartLineInput> {
 
 /** Validate a cart line quantity-change POST: a CartLine GID and a positive integer quantity. */
 export function parseUpdateForm(form: FormData): ParseResult<CartLineUpdate> {
-  const id = form.get('lineId');
-  if (typeof id !== 'string' || !CART_LINE_GID.test(id)) {
-    return { ok: false, error: 'lineId must be a CartLine GID' };
-  }
+  const id = parseLineId(form);
+  if (!id.ok) return id;
   const quantity = parseQuantity(form.get('quantity'), 1);
   if (quantity === null) return { ok: false, error: 'quantity must be a positive integer' };
-  return { ok: true, value: { id, quantity } };
+  return { ok: true, value: { id: id.value, quantity } };
 }
 
 /** Validate a cart line removal POST: a CartLine GID. */
 export function parseRemoveForm(form: FormData): ParseResult<{ lineId: string }> {
-  const lineId = form.get('lineId');
-  if (typeof lineId !== 'string' || !CART_LINE_GID.test(lineId)) {
-    return { ok: false, error: 'lineId must be a CartLine GID' };
-  }
-  return { ok: true, value: { lineId } };
+  const lineId = parseLineId(form);
+  return lineId.ok ? { ok: true, value: { lineId: lineId.value } } : lineId;
 }
 
 /**
