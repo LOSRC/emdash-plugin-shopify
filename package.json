@@ -1,6 +1,6 @@
 {
   "name": "@losrc/emdash-plugin-shopify",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Shopify for Astro and EmDash: a Worker-owned cart that works without JavaScript, shop-data reading, and a product-sync admin page",
   "license": "MIT",
   "type": "module",
@@ -36,6 +36,7 @@
   "files": [
     "dist",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "publishConfig": {
