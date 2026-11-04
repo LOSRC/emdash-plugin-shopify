@@ -20,10 +20,15 @@ import CartTotals from './CartTotals.astro';
  * and hands the result in:
  *
  * ```astro
- * const stored = await astroCartSession(Astro.session).read();
+ * Astro.response.headers.set('Cache-Control', 'private, no-store'); // it holds the checkout link
+ * const session = astroCartSession(Astro.session);
+ * const stored = await session.read();
  * let cart = null, loadFailed = false;
- * try { const raw = stored && await client.getCart(stored.id); cart = raw ? toCartView(raw) : null; }
- * catch { loadFailed = true; }
+ * try {
+ *   const raw = stored && await client.getCart(stored.id);
+ *   cart = raw ? toCartView(raw) : null;
+ *   if (stored && !raw) session.clear(); // forget it, so the header count follows
+ * } catch { loadFailed = true; }
  * <CartPage cart={cart} loadFailed={loadFailed} actionFailed={Astro.url.searchParams.has('error')} />
  * ```
  */

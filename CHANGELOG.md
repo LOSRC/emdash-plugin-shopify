@@ -2,6 +2,11 @@
 
 ## 0.4.0
 
+- Sync runs one at a time: a run takes a lock in `ctx.kv` (atomic, with a ten-minute TTL, so a dead run's lock is taken over), and a second press gets "A sync is already running" (a `409` from the route) without overwriting the last run. `runSync` also lists the store again before each draft, so an entry that appeared mid-run is not duplicated.
+- The routes take POST only. A refused or failed run from the `sync` route is now a `PluginRouteError` (`SYNC_FAILED`, status 500), so the host keeps the reason instead of answering a generic 500. The README says plainly that a script needs an `admin`-scoped token.
+- `performSync` reads the Worker environment inside its guard, so it never rejects.
+- The block type slug in the docs and tests is `product_grid`: EmDash slugs match `^[a-z][a-z0-9_]*$`.
+
 - The package root is now an EmDash native plugin: `shopifyPlugin({ shop })` for `astro.config`, and `createPlugin` for EmDash to load. It adds a **Shopify sync** page to the admin with a Sync button and a results view (created, flagged, unchanged, warnings), and a private `sync` route that returns the same report as JSON. Both routes need the `content:create` permission, so editors can use them. Outbound access is limited to the shop's Storefront host, and the token comes from the Worker environment at request time.
 - `runSync({ shopify, store, purge, refreshProductOptions? })`: makes one draft per channel product with no entry (the handle in `title`, so the slug derives from it, and the title in `shopify_title`), reports (never writes) entries whose product Shopify no longer returns, and never updates or deletes. It purges `SHOP_DATA_CACHE_TAG` once per run. A second run with no Shopify change changes nothing. An empty channel while entries are linked, or any Shopify failure, stops the run before any write or purge.
 - The content store is a narrow interface (`ContentStore`: list linked entries, create a draft). `createEmdashContentStore` implements it over `ctx.content`, listing the collection in pages; collection and field names are options (defaults `products`, `shopify_product_id`, `title`, `shopify_title`).
@@ -13,6 +18,12 @@
 - `emdash` is a dev dependency (types and the plugin tests); the peer range is unchanged.
 
 ## 0.3.0
+
+- A stored cart Shopify no longer resolves is forgotten (`CartSession` gains `clear()`; `astroCartSession` calls the Astro session's `delete`), so the header count follows an empty view. A custom `CartSession` must now implement `clear`.
+- A lost cart is told from a refused change: Shopify answers a missing `cartId` with `cart: null` and a userError whose field is `["cartId"]`, and `isCartGone` (new, from `/core`) reads that. Only a lost cart is recreated on add, or forgotten on update and remove; a refusal on a live cart keeps the cart and its lines, and is a `422`. The fake answers a missing cart that way (`answerMissingCartWith('null')` gives the old bare form) and mints CartLine ids that carry the cart token, as Shopify's do. The cart queries now ask for each userError's `code`.
+- `DEFAULT_PRODUCT_PATH` is `/product/{handle}/`, with the trailing slash.
+- The JSON add snapshot is `private, no-store` like every other cart response.
+- The drawer says "Your cart is still updating" in its live region when a second submit arrives while one is in flight, instead of dropping it silently.
 
 - Added `CartPage`, `CartTotals`, `CartEmpty`, `CartDrawer` and `CartCount` Astro components (`@losrc/emdash-plugin-shopify/components/*`), styled with Tailwind 4. Lime's Tailwind 3.4 classes were brought across with its pixel-keyed spacing converted (`N` to `N/4`, so `px-24` is `px-6`) and its custom theme dropped for default-theme utilities. Sites need an `@source` line so Tailwind scans the components; see the README.
 - Added the `<cart-drawer>` and `<cart-count>` custom elements (`@losrc/emdash-plugin-shopify/elements/*`): no framework dependency, a native modal `<dialog>`, a live region, focus handling.

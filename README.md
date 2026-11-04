@@ -4,7 +4,7 @@ The shop core (`@losrc/emdash-plugin-shopify/core`) works on any Astro site, wit
 
 A simple, robust Shopify integration for [EmDash](https://emdashcms.com) sites on Cloudflare.
 
-- **Shop core (`/core`):** a Worker-owned cart on the Shopify Storefront API that works without JavaScript, with the cart id kept in the Astro session and never in a URL.
+- **Shop core (`/core`):** a Worker-owned cart on the Shopify Storefront API that works without JavaScript, with the cart id kept in the Astro session and never in a URL (see [what is in a URL and what is in a body](#the-json-contract)).
 - **Sync plugin (package root):** an EmDash admin page with a Sync button that links Shopify products to EmDash product entries by Shopify product ID, making drafts for new products and never overwriting editorial content.
 - **Cart UI (`/components/*`, `/elements/*`):** Tailwind 4 Astro components for a `/cart/` page, a slide-out cart drawer and a header count. The page works with no JavaScript; the drawer and count are small custom elements with no framework dependency.
 
@@ -91,7 +91,7 @@ export function GET(context: APIContext): Promise<Response> {
 }
 ```
 
-The handlers serve two callers from one endpoint. A plain `<form method="POST">` gets a `303` to `/cart/` (or to `/cart/?error=add|update|remove` when something went wrong). A `fetch` that sends `Accept: application/json` or `X-Requested-With: fetch`, or any request with a JSON body, gets JSON; see [the JSON contract](#the-json-contract). The cart id is never put in a redirect or a response body. `CART_ERROR_MESSAGE` and `CART_REJECTED_MESSAGE` are the friendly texts for the error banner.
+The handlers serve two callers from one endpoint. A plain `<form method="POST">` gets a `303` to `/cart/` (or to `/cart/?error=add|update|remove` when something went wrong). A `fetch` that sends `Accept: application/json` or `X-Requested-With: fetch`, or any request with a JSON body, gets JSON; see [the JSON contract](#the-json-contract). The cart id is never put in a redirect's `Location` or in a response body. The cart *token* is in a view body: see [the JSON contract](#the-json-contract). `CART_ERROR_MESSAGE` and `CART_REJECTED_MESSAGE` are the friendly texts for the error banner.
 
 ### The JSON contract
 
@@ -102,7 +102,16 @@ The handlers serve two callers from one endpoint. A plain `<form method="POST">`
 | `GET /api/cart/view` (`handleView`) | the stored cart as a `CartView`, fresh from Shopify |
 | `GET /api/cart/summary` | `{ lineCount }` from the session, with no Shopify round trip |
 
-A `CartView` is `{ lineCount, subtotal: { amount, currencyCode }, checkoutUrl, lines: [{ id, quantity, productTitle, productHandle, variantTitle, unitPrice, lineTotal, image }] }`. A cart that does not exist (none started, or Shopify no longer has it) is an empty view: `lines: []`, `checkoutUrl: ''`. Failures are `{ error }`: `400` for invalid input, `422` when Shopify refuses the change, `502` when Shopify cannot be reached. Nothing is written to the session on a failure. Every response from the view and summary routes, and every `CartView`, is sent `Cache-Control: private, no-store` (so is the purge endpoint's answer), because `checkoutUrl` carries Shopify's cart token and the count exists precisely because pages are cached and shared.
+A `CartView` is `{ lineCount, subtotal: { amount, currencyCode }, checkoutUrl, lines: [{ id, quantity, productTitle, productHandle, variantTitle, unitPrice, lineTotal, image }] }`. A cart that does not exist (none started, or Shopify no longer has it) is an empty view: `lines: []`, `checkoutUrl: ''`. Failures are `{ error }`: `400` for invalid input, `422` when Shopify refuses the change, `502` when Shopify cannot be reached. Nothing is written to the session on a failure. Every response from the view and summary routes, and every `CartView`, is sent `Cache-Control: private, no-store` (so is the purge endpoint's answer), because a view body carries the cart token and the count exists precisely because pages are cached and shared.
+
+What is in a URL and what is in a body, exactly:
+
+- **No `Location` carries the cart id or its token.** Every redirect is `/cart/` or `/cart/?error=...`.
+- **No body carries the full cart id** (`gid://shopify/Cart/...`); the id stays in the session.
+- **A `CartView` body does carry the cart token**, in two places: `checkoutUrl` (Shopify's checkout link embeds it) and each line's `id` (a CartLine id ends `?cart=<token>`). The drawer needs the line ids to update and remove lines, and the checkout link is how the visitor reaches checkout, so neither can be left out. That is acceptable because these bodies go only to the session's own browser and are `private, no-store`. So never cache or log a view response, and never copy a line id or `checkoutUrl` into a URL you build.
+- The snapshot (`{ lineCount, subtotal, currency }`) and the summary carry neither.
+
+A cart Shopify has lost (expired, or checked out) is told from a refused change on a live cart. Shopify answers a mutation on a `cartId` it cannot resolve with `cart: null` and a userError whose `field` is `["cartId"]`; the runtime relies on that (`isCartGone`, exported from `/core`). The lost cart is then forgotten, so the header count goes to 0 along with the empty view, and an add starts a fresh cart. Any other userError on a null cart is a refusal: the cart and its lines are kept, and the caller gets the `422`.
 
 `handleView(client, session)` is the one new route to mount for the drawer:
 
@@ -126,13 +135,13 @@ Every action reads its fields from a form body (`application/x-www-form-urlencod
 
 ### Rendering a cart
 
-`toCartView(cart)` reduces Shopify's cart to a flat `CartView` (`lineCount`, `subtotal`, `checkoutUrl`, `lines`). Get the cart with `client.getCart(stored.id)` where `stored` comes from `astroCartSession(Astro.session).read()`; `null` means Shopify no longer has it (expired or checked out). `checkoutUrl` carries Shopify's cart token, so render it into the page but never into a redirect.
+`toCartView(cart)` reduces Shopify's cart to a flat `CartView` (`lineCount`, `subtotal`, `checkoutUrl`, `lines`). Get the cart with `client.getCart(stored.id)` where `stored` comes from `astroCartSession(Astro.session).read()`; `null` means Shopify no longer has it (expired or checked out): call `astroCartSession(Astro.session).clear()` so the header count follows. `checkoutUrl` carries Shopify's cart token, so render it into the page but never into a redirect, and send the page `Cache-Control: private, no-store`.
 
 `formatMoney('14.99', 'GBP')` gives `£14.99`; `formatPriceRange(min, max)` gives `£12.50–£18.00`, or one price when they match.
 
 ### Testing
 
-`@losrc/emdash-plugin-shopify/core/testing` exports `createFakeCartClient()`, an in-memory client with real cart behaviour (reuse, stale-cart recovery, line merging, exact-decimal totals), a product catalogue with publish state (`seedProduct`, `setPublished`, `removeProduct`; an unpublished product is invisible, as on Shopify) and switches to simulate Shopify failing (`failNextWith`, which also fails the next product read) or refusing a change (`rejectMutationsWith`). Drive the handlers with it and a plain `CartSession`; no Worker runtime or Shopify account is needed.
+`@losrc/emdash-plugin-shopify/core/testing` exports `createFakeCartClient()`, an in-memory client with real cart behaviour (reuse, stale-cart recovery, line merging, exact-decimal totals), a product catalogue with publish state (`seedProduct`, `setPublished`, `removeProduct`; an unpublished product is invisible, as on Shopify) and switches to simulate Shopify failing (`failNextWith`, which also fails the next product read), refusing a change (`rejectMutationsWith`) or answering a lost cart (`answerMissingCartWith('userErrors' | 'null')`: the default, `userErrors` with a `cartId` field, is how Shopify does it). Its CartLine ids carry the cart token, as Shopify's do. Drive the handlers with it and a plain `CartSession`; no Worker runtime or Shopify account is needed.
 
 ## Reading shop data
 
@@ -195,13 +204,18 @@ import CartPage from '@losrc/emdash-plugin-shopify/components/CartPage.astro';
 import { astroCartSession, createStorefrontCartClient, storefrontConfigFromEnv, toCartView } from '@losrc/emdash-plugin-shopify/core';
 export const prerender = false;
 
+// The page holds the visitor's checkout link: never let a shared cache keep it.
+Astro.response.headers.set('Cache-Control', 'private, no-store');
+
 const client = createStorefrontCartClient(storefrontConfigFromEnv(env));
-const stored = await astroCartSession(Astro.session).read();
+const session = astroCartSession(Astro.session);
+const stored = await session.read();
 let cart = null;
 let loadFailed = false;
 try {
   const raw = stored ? await client.getCart(stored.id) : null; // null: Shopify no longer has it
   cart = raw ? toCartView(raw) : null;
+  if (stored && !raw) session.clear(); // forget it, so the header count follows
 } catch {
   loadFailed = true;
 }
@@ -244,7 +258,7 @@ export default defineConfig({
           // idField: 'shopify_product_id',
           // handleField: 'title',
           // labelField: 'shopify_title',
-          // productOptions: { blockType: 'product-grid', field: 'products' },
+          // productOptions: { blockType: 'product_grid', field: 'products' },
         }),
       ],
     }),
@@ -254,7 +268,13 @@ export default defineConfig({
 
 Set the token as a Worker secret (`wrangler secret put SHOPIFY_STOREFRONT_TOKEN`). It is read from the Worker environment when a sync runs; it is never in the plugin options, which are serialised into the build. The plugin's only outbound host is `shop`, and every Shopify request goes through EmDash's `ctx.http.fetch`.
 
-Editors need the `content:create` permission (Contributor and up) to open the page and press the button. The same run is available as `POST /_emdash/api/plugins/shopify/sync`, which answers with the report as JSON, for scripts that call it with an API token.
+Editors need the `content:create` permission (Contributor and up) to open the page and press the button. The same run is available as `POST /_emdash/api/plugins/shopify/sync`, which answers with the report as JSON, for scripts. Both routes take POST only (anything else is a `405`).
+
+**A script needs an `admin`-scoped API token.** EmDash lets only a token with the `admin` scope call a private plugin route, whatever permission the route declares, so a `content:write` token gets a `403`. The `content:create` permission is what an editor's session needs; it does not apply to tokens. A script that must not hold `admin` should instead run the sync through an editor's session, or call `runSync` itself.
+
+**One run at a time.** The Sync button stays clickable while a run is going, so a run takes a lock in the plugin's `ctx.kv` (`sync:lock`, with its start time; `compareAndSet`, so taking it is atomic). A second press while a run is going makes nothing: the page shows "A sync is already running" and keeps the last real run, and the route answers `409` with the same message. A lock older than ten minutes is taken over, since a run that died never lets go. As a backstop, the run lists the collection again just before each draft, so an entry that appeared in the meantime is not duplicated.
+
+**Errors from the route.** A run that did not happen is a `PluginRouteError`, so the host keeps the reason in the body instead of a generic 500: `SYNC_FAILED` (status 500: the token is not set, the plugin lacks a capability, Shopify failed, or the run was refused) and `409` when another run holds the lock.
 
 ### The Products collection
 
@@ -272,12 +292,13 @@ Shop data (price, images, availability, the handle) is not stored on the entry; 
 
 ### What a run does
 
-1. Lists the products on the sales channel. If Shopify fails, or answers with no products while entries exist, the run stops before it changes anything.
-2. Lists the collection in pages of 100 and picks out the entries that carry a Shopify product ID.
-3. Makes one draft for each channel product with no entry. A draft that cannot be made is a warning; the run carries on.
-4. Reports entries whose product the channel does not return (deleted or unpublished). This is report-only: nothing is written to them.
-5. If configured, adds the product slugs to the product grid's picker.
-6. Purges the `SHOP_DATA_CACHE_TAG` cache tag, once. A failed purge is a warning in the report.
+1. Takes the run lock, or stops if another run holds it.
+2. Lists the products on the sales channel. If Shopify fails, or answers with no products while entries exist, the run stops before it changes anything.
+3. Lists the collection in pages of 100 and picks out the entries that carry a Shopify product ID.
+4. Makes one draft for each channel product with no entry, listing the collection again just before each one so an entry that has appeared since is not duplicated. A draft that cannot be made is a warning; the run carries on.
+5. Reports entries whose product the channel does not return (deleted or unpublished). This is report-only: nothing is written to them.
+6. If configured, adds the product slugs to the product grid's picker.
+7. Purges the `SHOP_DATA_CACHE_TAG` cache tag, once. A failed purge is a warning in the report.
 
 The report is `{ created, flagged, unchanged, warnings }`. The page shows the last run when it opens.
 

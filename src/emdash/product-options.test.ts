@@ -3,7 +3,7 @@ import { createProductOptionsRefresher, type BlockTypeLike, type BlockTypeRegist
 
 function blockType(options: string[], type = 'multiSelect'): BlockTypeLike {
   return {
-    slug: 'product-grid',
+    slug: 'product_grid',
     currentVersion: 2,
     versions: [
       { version: 1, fingerprint: 'old', fields: [] },
@@ -41,7 +41,7 @@ describe('createProductOptionsRefresher', () => {
     const invalidated: string[] = [];
     const refresh = createProductOptionsRefresher({
       registry: async () => registry,
-      blockType: 'product-grid',
+      blockType: 'product_grid',
       field: 'products',
       invalidateCollection: (collection) => void invalidated.push(collection),
     });
@@ -49,7 +49,7 @@ describe('createProductOptionsRefresher', () => {
     await refresh(['blue-mug', 'red-mug', 'green-mug']);
 
     expect(updates).toHaveLength(1);
-    expect(updates[0]?.slug).toBe('product-grid');
+    expect(updates[0]?.slug).toBe('product_grid');
     expect(updates[0]?.input.expectedFingerprint).toBe('fp-2');
     expect(updates[0]?.input.breaking).toBeUndefined();
     expect(updates[0]?.input.fields).toEqual([
@@ -67,23 +67,23 @@ describe('createProductOptionsRefresher', () => {
 
   it('writes nothing when every slug is already an option', async () => {
     const { registry, updates } = fakeRegistry(blockType(['blue-mug', 'red-mug']));
-    const refresh = createProductOptionsRefresher({ registry: async () => registry, blockType: 'product-grid', field: 'products' });
+    const refresh = createProductOptionsRefresher({ registry: async () => registry, blockType: 'product_grid', field: 'products' });
     await refresh(['red-mug']);
     expect(updates).toEqual([]);
   });
 
   it('fails readably when the block type does not exist', async () => {
     const { registry } = fakeRegistry(null);
-    const refresh = createProductOptionsRefresher({ registry: async () => registry, blockType: 'product-grid', field: 'products' });
-    await expect(refresh(['a'])).rejects.toThrow('Block type "product-grid" not found');
+    const refresh = createProductOptionsRefresher({ registry: async () => registry, blockType: 'product_grid', field: 'products' });
+    await expect(refresh(['a'])).rejects.toThrow('Block type "product_grid" not found');
   });
 
   it('fails readably when the field is missing or not a select', async () => {
     const { registry } = fakeRegistry(blockType([]));
-    const missing = createProductOptionsRefresher({ registry: async () => registry, blockType: 'product-grid', field: 'nope' });
-    await expect(missing(['a'])).rejects.toThrow('Block type "product-grid" has no select or multiSelect field "nope"');
+    const missing = createProductOptionsRefresher({ registry: async () => registry, blockType: 'product_grid', field: 'nope' });
+    await expect(missing(['a'])).rejects.toThrow('Block type "product_grid" has no select or multiSelect field "nope"');
 
-    const heading = createProductOptionsRefresher({ registry: async () => registry, blockType: 'product-grid', field: 'heading' });
+    const heading = createProductOptionsRefresher({ registry: async () => registry, blockType: 'product_grid', field: 'heading' });
     await expect(heading(['a'])).rejects.toThrow('has no select or multiSelect field "heading"');
   });
 });

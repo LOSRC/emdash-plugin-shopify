@@ -36,7 +36,7 @@ export interface BlockTypeRegistryLike {
 }
 
 export interface ProductOptionsConfig {
-  /** Block type slug, for example `product-grid`. */
+  /** Block type slug, for example `product_grid`. */
   blockType: string;
   /** The `select` or `multiSelect` field of that block type that lists the products. */
   field: string;

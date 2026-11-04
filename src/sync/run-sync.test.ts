@@ -326,12 +326,12 @@ describe('runSync: the product picker', () => {
       store,
       purge,
       refreshProductOptions: async () => {
-        throw new Error('Block type "product-grid" not found');
+        throw new Error('Block type "product_grid" not found');
       },
     });
 
     expect(report.warnings).toEqual([
-      'The product picker could not be refreshed (Block type "product-grid" not found). New products are not pickable until the next sync.',
+      'The product picker could not be refreshed (Block type "product_grid" not found). New products are not pickable until the next sync.',
     ]);
     expect(purges).toHaveLength(1);
   });
