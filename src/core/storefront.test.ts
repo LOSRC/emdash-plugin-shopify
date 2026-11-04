@@ -35,6 +35,39 @@ function stubFetch(...replies: Array<{ status?: number; statusText?: string; jso
 
 afterEach(() => vi.unstubAllGlobals());
 
+describe('Storefront transport shop host', () => {
+  it.each([
+    'evil.example.com',
+    'example-shop.myshopify.com.evil.com',
+    'example-shop.myshopify.com/path',
+    'user@example-shop.myshopify.com',
+    'example-shop.myshopify.com:8443',
+    'https://example-shop.myshopify.com',
+    'example-shop.myshopify.com?x=1',
+    '.myshopify.com',
+    '-shop.myshopify.com',
+    'a b.myshopify.com',
+    '',
+  ])('refuses %j before any request is made', (shop) => {
+    const { fetch, calls } = stubFetch();
+    expect(() => createShopifyTransport({ shop, token: 't', fetch })).toThrow(/myshopify\.com/);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('accepts a bare myshopify.com hostname in any case', async () => {
+    const { fetch, calls } = stubFetch({ json: { data: { ok: true } } });
+    await createShopifyTransport({ shop: 'Example-Shop.MyShopify.com', token: 't', fetch }).request('q');
+    expect(calls[0]!.url).toBe('https://example-shop.myshopify.com/api/' + DEFAULT_API_VERSION + '/graphql.json');
+  });
+
+  it('is checked by the cart and products clients and by storefrontConfigFromEnv', () => {
+    expect(() => createStorefrontCartClient({ shop: 'evil.example.com', token: 't' })).toThrow(/myshopify\.com/);
+    expect(() => storefrontConfigFromEnv({ SHOPIFY_SHOP: 'evil.example.com', SHOPIFY_STOREFRONT_TOKEN: 't' })).toThrow(
+      /SHOPIFY_SHOP.*myshopify\.com/,
+    );
+  });
+});
+
 describe('Storefront transport', () => {
   it('POSTs the GraphQL operation to the shop Storefront endpoint with the public token header', async () => {
     const { fetch, calls } = stubFetch({ json: { data: { ok: true } } });

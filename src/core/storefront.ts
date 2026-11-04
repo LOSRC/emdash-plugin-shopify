@@ -3,6 +3,7 @@ import type { CartLineInput, CartLineUpdate } from './cart';
 import type { CartMutationResult, ShopifyCartClient } from './client';
 import { createShopifyTransport } from './transport';
 import type { ShopifyTransportConfig } from './transport';
+import { assertShopHost } from './shop-host';
 
 /**
  * Storefront Cart API adapter: the production implementation of `ShopifyCartClient`, the impure
@@ -39,6 +40,11 @@ export interface StorefrontEnv {
 export function storefrontConfigFromEnv(env: StorefrontEnv): StorefrontConfig {
   if (!env.SHOPIFY_SHOP) throw new Error('SHOPIFY_SHOP is not set');
   if (!env.SHOPIFY_STOREFRONT_TOKEN) throw new Error('SHOPIFY_STOREFRONT_TOKEN is not set');
+  try {
+    assertShopHost(env.SHOPIFY_SHOP);
+  } catch (error) {
+    throw new Error(`SHOPIFY_SHOP is invalid. ${(error as Error).message}`);
+  }
   return {
     shop: env.SHOPIFY_SHOP,
     token: env.SHOPIFY_STOREFRONT_TOKEN,

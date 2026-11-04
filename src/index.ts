@@ -8,6 +8,7 @@
  * `cloudflare:workers` at load.
  */
 import { definePlugin, type PluginDescriptor } from 'emdash';
+import { assertShopHost } from './core/shop-host';
 import { buildPluginDefinition, PLUGIN_ID, PLUGIN_VERSION, type ShopifyPluginHooks, type ShopifyPluginOptions } from './plugin';
 
 export { PLUGIN_ID, PLUGIN_VERSION };
@@ -31,6 +32,7 @@ export type { ProductOptionsConfig } from './emdash/product-options';
 
 /** The plugin descriptor for `emdash({ plugins: [shopifyPlugin({ shop })] })`. */
 export function shopifyPlugin(options: ShopifyPluginOptions): PluginDescriptor<ShopifyPluginOptions> {
+  assertShopHost(options.shop);
   return {
     id: PLUGIN_ID,
     version: PLUGIN_VERSION,
@@ -45,6 +47,7 @@ export function shopifyPlugin(options: ShopifyPluginOptions): PluginDescriptor<S
  * refresher or the environment reader passes `hooks` from a small local module of its own.
  */
 export function createPlugin(options: ShopifyPluginOptions, hooks: ShopifyPluginHooks = {}) {
+  assertShopHost(options.shop);
   return definePlugin(buildPluginDefinition(options, hooks));
 }
 

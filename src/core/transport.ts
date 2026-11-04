@@ -5,6 +5,7 @@
  * identically in a Worker and in Node and is importable under vitest. Config is injected by the
  * caller (never read here), so nothing pulls in `cloudflare:workers` or `process.env`.
  */
+import { assertShopHost } from './shop-host';
 
 /**
  * Which Storefront token the config carries. A `public` token is sent as
@@ -17,7 +18,7 @@ export type StorefrontTokenKind = 'public' | 'private';
 export const DEFAULT_API_VERSION = '2026-10';
 
 export interface ShopifyTransportConfig {
-  /** Shop domain, e.g. `example-shop.myshopify.com`. */
+  /** Shop domain, e.g. `example-shop.myshopify.com`. A bare `*.myshopify.com` hostname; anything else throws. */
   shop: string;
   /** API version; defaults to {@link DEFAULT_API_VERSION} when unset. */
   apiVersion?: string;
@@ -44,7 +45,7 @@ export interface ShopifyTransport {
 /** Build a transport for the Storefront API. */
 export function createShopifyTransport(config: ShopifyTransportConfig): ShopifyTransport {
   const version = config.apiVersion ?? DEFAULT_API_VERSION;
-  const endpoint = `https://${config.shop}/api/${version}/graphql.json`;
+  const endpoint = `https://${assertShopHost(config.shop)}/api/${version}/graphql.json`;
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (config.tokenKind === 'private') {
     headers['Shopify-Storefront-Private-Token'] = config.token;
