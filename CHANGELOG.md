@@ -2,6 +2,8 @@
 
 ## 0.4.0
 
+- The cart components no longer depend on the site's spacing scale: each component's root sets `--spacing: 0.25rem`, so a site with `--spacing: 0.0625rem` (pixel-keyed) gets the same padding, gaps and sizes as one on Tailwind's default. A site that worked around it with `cart-drawer, .shop-cart { --spacing: 0.25rem }` can delete the rule. The README now says what a site's theme does change (colours, fonts, type sizes, shadows, breakpoints) and what it does not (spacing).
+- The fake cart client names a line for a seeded variant from its catalogue: the product title and handle, the variant title, the variant's price (an explicit `prices` entry still wins) and the product image. A variant that was never seeded, or whose product was removed, keeps the stub ("Fake product", `defaultPrice`, no image).
 - Sync runs one at a time: a run takes a lock in `ctx.kv` (atomic, with a ten-minute TTL, so a dead run's lock is taken over), and a second press gets "A sync is already running" (a `409` from the route) without overwriting the last run. `runSync` also lists the store again once, just before the first draft, so an entry that appeared mid-run is not duplicated.
 - The routes take POST only. A refused or failed run from the `sync` route is now a `PluginRouteError` (`SYNC_FAILED`, status 500), so the host keeps the reason instead of answering a generic 500. The README says plainly that a script needs an `admin`-scoped token.
 - `performSync` reads the Worker environment inside its guard, so it never rejects.

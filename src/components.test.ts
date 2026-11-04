@@ -3,6 +3,8 @@ import { experimental_AstroContainer as AstroContainer } from 'astro/container';
 import CartPage from './components/CartPage.astro';
 import CartCount from './components/CartCount.astro';
 import CartDrawer from './components/CartDrawer.astro';
+import CartEmpty from './components/CartEmpty.astro';
+import CartTotals from './components/CartTotals.astro';
 import { toCartView } from './core/cart';
 import { createFakeCartClient } from './core/testing';
 
@@ -131,5 +133,20 @@ describe('CartDrawer', () => {
     expect(html).toContain('aria-live="polite"');
     expect(html).toContain('Free shipping (UK)');
     expect(html).toContain('<template data-line>');
+  });
+});
+
+describe('spacing scale', () => {
+  // A site may key `--spacing` to pixels (0.0625rem); the components are written for 0.25rem and
+  // put it back on their own root, so their `p-4` and `size-16` mean the same there. The computed
+  // paddings were checked in a browser against a Tailwind 4.3 build.
+  it.each([
+    ['CartPage', () => render(CartPage, { cart: null }), '<div class="[--spacing:0.25rem] '],
+    ['CartTotals', async () => render(CartTotals, { cart: await sampleCart() }), '<section aria-labelledby="cart-summary-title" class="[--spacing:0.25rem] '],
+    ['CartEmpty', () => render(CartEmpty), '<div class="[--spacing:0.25rem] '],
+    ['CartCount', () => render(CartCount), 'class="[--spacing:0.25rem] '],
+    ['CartDrawer', () => render(CartDrawer), 'class="[--spacing:0.25rem]"'],
+  ])('%s sets its own --spacing on its root', async (_name, html, rootStart) => {
+    expect(await html()).toContain(rootStart);
   });
 });

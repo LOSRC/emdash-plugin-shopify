@@ -47,7 +47,10 @@ export interface FakeCartClient extends ShopifyClient, Pick<FakeCatalogue, 'seed
 }
 
 export interface FakeClientOptions {
-  /** Per-variant unit price (decimal string). Unseeded variants fall back to `defaultPrice`. */
+  /**
+   * Per-variant unit price (decimal string). It wins over a seeded variant's own price. A variant
+   * in neither falls back to `defaultPrice`.
+   */
   prices?: Record<string, string>;
   /** Fallback unit price for any variant not in `prices`. */
   defaultPrice?: string;
@@ -88,8 +91,14 @@ const money = (scaled: number, currencyCode: string) => ({ amount: formatAmount(
 
 export function createFakeCartClient(options: FakeClientOptions = {}): FakeCartClient {
   const currency = options.currency ?? 'GBP';
+  const catalogue = createFakeCatalogue({ currency, checkFailure });
   // Unit price as exact scaled integer units - the source for all money the fake mints.
-  const priceOf = (variantId: string) => toScaledUnits(options.prices?.[variantId] ?? options.defaultPrice ?? '10.00');
+  // Then, in order: `options.prices`, the seeded variant's price, `defaultPrice`, `10.00`. A seeded variant
+  // has a price of its own (10.00 unless seeded otherwise), so `defaultPrice` only reaches unseeded ones.
+  const priceOf = (variantId: string) =>
+    toScaledUnits(
+      options.prices?.[variantId] ?? catalogue.findVariant(variantId)?.variant.price.amount ?? options.defaultPrice ?? '10.00',
+    );
 
   const store = new Map<string, FakeCart>();
   let cartSeq = 0;
@@ -116,16 +125,18 @@ export function createFakeCartClient(options: FakeClientOptions = {}): FakeCartC
   function render(cart: FakeCart): Cart {
     const lines: CartLine[] = cart.lines.map((line) => {
       const unit = priceOf(line.merchandiseId);
+      // A seeded variant is named from the catalogue; the stub is for an id the catalogue has never seen.
+      const found = catalogue.findVariant(line.merchandiseId);
       return {
         id: line.id,
         quantity: line.quantity,
         cost: { totalAmount: money(unit * line.quantity, currency) },
         merchandise: {
           id: line.merchandiseId,
-          title: 'Default Title',
+          title: found?.variant.title ?? 'Default Title',
           price: money(unit, currency),
-          product: { title: 'Fake product', handle: 'fake-product' },
-          image: null,
+          product: found ? { title: found.product.title, handle: found.product.handle } : { title: 'Fake product', handle: 'fake-product' },
+          image: found?.product.image ? { url: found.product.image.url, altText: found.product.image.altText } : null,
         },
       };
     });
@@ -154,8 +165,6 @@ export function createFakeCartClient(options: FakeClientOptions = {}): FakeCartC
     }
   }
 
-  const catalogue = createFakeCatalogue({ currency, checkFailure });
-
   const ok = (cart: FakeCart): CartMutationResult => ({ cart: render(cart), userErrors: [] });
   const gone = (): CartMutationResult => {
     if (missingCartForm === 'null') return { cart: null, userErrors: [] };
@@ -170,7 +179,11 @@ export function createFakeCartClient(options: FakeClientOptions = {}): FakeCartC
       return snapshot;
     },
 
-    ...catalogue,
+    seedProduct: catalogue.seedProduct,
+    setPublished: catalogue.setPublished,
+    removeProduct: catalogue.removeProduct,
+    getProducts: catalogue.getProducts,
+    listChannelProducts: catalogue.listChannelProducts,
 
     failNextWith(error: Error) {
       pendingError = error;

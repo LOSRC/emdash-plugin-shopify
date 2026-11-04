@@ -8,7 +8,7 @@ interface Props {
 const { href = '/', class: className = '' } = Astro.props;
 ---
 
-<div class:list={['mx-auto max-w-prose space-y-6 py-12 text-center', className]}>
+<div class:list={['[--spacing:0.25rem] mx-auto max-w-prose space-y-6 py-12 text-center', className]}>
   <h2 class="text-2xl font-bold">Your shopping cart is empty</h2>
   <a
     href={href}

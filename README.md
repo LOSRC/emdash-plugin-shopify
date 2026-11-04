@@ -141,7 +141,7 @@ Every action reads its fields from a form body (`application/x-www-form-urlencod
 
 ### Testing
 
-`@losrc/emdash-plugin-shopify/core/testing` exports `createFakeCartClient()`, an in-memory client with real cart behaviour (reuse, stale-cart recovery, line merging, exact-decimal totals), a product catalogue with publish state (`seedProduct`, `setPublished`, `removeProduct`; an unpublished product is invisible, as on Shopify) and switches to simulate Shopify failing (`failNextWith`, which also fails the next product read), refusing a change (`rejectMutationsWith`) or answering a lost cart (`answerMissingCartWith('userErrors' | 'null')`: the default, `userErrors` with a `cartId` field, is how Shopify does it). Its CartLine ids carry the cart token, as Shopify's do. Drive the handlers with it and a plain `CartSession`; no Worker runtime or Shopify account is needed.
+`@losrc/emdash-plugin-shopify/core/testing` exports `createFakeCartClient()`, an in-memory client with real cart behaviour (reuse, stale-cart recovery, line merging, exact-decimal totals), a product catalogue with publish state (`seedProduct`, `setPublished`, `removeProduct`; an unpublished product is invisible, as on Shopify) and switches to simulate Shopify failing (`failNextWith`, which also fails the next product read), refusing a change (`rejectMutationsWith`) or answering a lost cart (`answerMissingCartWith('userErrors' | 'null')`: the default, `userErrors` with a `cartId` field, is how Shopify does it). Its CartLine ids carry the cart token, as Shopify's do. A cart line for a seeded variant takes its product title, handle, variant title, price and image from the catalogue (an explicit `prices` entry still wins for the price); a variant the catalogue has never seen is a stub, "Fake product" at `defaultPrice` (£10.00) with no image. Drive the handlers with it and a plain `CartSession`; no Worker runtime or Shopify account is needed.
 
 ## Reading shop data
 
@@ -181,7 +181,17 @@ The components are styled with Tailwind 4 utility classes. Tailwind skips `node_
 @source '../../node_modules/@losrc/emdash-plugin-shopify/src/components';
 ```
 
-The path is relative to the CSS file. (In `astro dev` the classes appear without the line, because Tailwind sees the component modules as Vite loads them; a production build does not, so check a build.) Only default-theme utilities are used (`stone`, `red`, `size-*`, `max-w-md`), so the look follows the site's theme. Every component takes a `class` prop that is added after the defaults.
+The path is relative to the CSS file. (In `astro dev` the classes appear without the line, because Tailwind sees the component modules as Vite loads them; a production build does not, so check a build.)
+
+#### What the site's theme changes
+
+The components use Tailwind's default utilities, so they read the site's theme where the theme defines the same names, with one exception:
+
+- **Spacing is fixed.** Each component's root element sets `--spacing: 0.25rem` (Tailwind's default scale), so `p-4`, `gap-3`, `size-16` and the rest come out the same whatever the site's own `--spacing` is. A site that keys spacing to pixels (`--spacing: 0.0625rem`, so `p-4` is 4px) does not crush them. The rule only reaches the component's own elements; the site's spacing everywhere else is untouched. It relies on Tailwind emitting `var(--spacing)` in utilities, which is what a plain `@theme { --spacing: ... }` does; `@theme inline { --spacing: ... }` writes the value into every utility and would defeat it.
+- **Themeable:** the colours the components use (`--color-stone-*`, `--color-red-*`, `--color-white`), fonts (`--font-sans`, inherited from the page), type sizes (`--text-*`), `--tracking-wide`, shadows, `--container-md` (the drawer's width) and the breakpoints (`sm:` and `lg:` switch the layout, so a site's `--breakpoint-*` moves them). Redefine a palette name such as `--color-stone-900` to recolour the buttons and borders.
+- **Not themeable:** the spacing scale (above). Anything else is the `class` prop's job.
+
+Every component takes a `class` prop that is added after the defaults.
 
 ### Components
 

@@ -41,12 +41,24 @@ export interface FakeCatalogue extends ShopifyProductsClient {
   removeProduct(id: string): void;
 }
 
+/** A seeded variant with its product, as a cart line shows it. */
+export interface CatalogueVariant {
+  product: ShopProduct;
+  variant: ShopVariant;
+}
+
+/** The fake catalogue plus the lookup the fake cart names its lines from (not part of its public type). */
+export interface CatalogueWithLookup extends FakeCatalogue {
+  /** A seeded variant by id, published or not (a cart already holds it); removed products are gone. */
+  findVariant(variantId: string): CatalogueVariant | undefined;
+}
+
 interface Entry {
   product: ShopProduct;
   published: boolean;
 }
 
-export function createFakeCatalogue(deps: { currency: string; checkFailure: () => void }): FakeCatalogue {
+export function createFakeCatalogue(deps: { currency: string; checkFailure: () => void }): CatalogueWithLookup {
   const { currency, checkFailure } = deps;
   const entries = new Map<string, Entry>();
   let variantSeq = 0;
@@ -95,6 +107,14 @@ export function createFakeCatalogue(deps: { currency: string; checkFailure: () =
 
     removeProduct(id) {
       entries.delete(id);
+    },
+
+    findVariant(variantId) {
+      for (const { product } of entries.values()) {
+        const variant = product.variants.find((candidate) => candidate.id === variantId);
+        if (variant) return { product, variant };
+      }
+      return undefined;
     },
 
     async getProducts(ids) {

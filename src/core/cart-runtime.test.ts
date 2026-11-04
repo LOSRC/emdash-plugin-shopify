@@ -822,3 +822,101 @@ describe('request bodies: forms and JSON', () => {
     }
   });
 });
+
+describe('the fake client names cart lines from its seeded catalogue', () => {
+  const MOON = 'gid://shopify/ProductVariant/20000000001';
+  const SUN = 'gid://shopify/ProductVariant/20000000002';
+
+  function seededClient() {
+    const client = createFakeCartClient();
+    client.seedProduct({
+      id: '2001',
+      handle: 'moon-print',
+      title: 'Moon print',
+      image: { url: 'https://cdn.example.com/moon.jpg', altText: 'A full moon' },
+      variants: [
+        { id: MOON, title: 'A3', price: '35.00' },
+        { id: SUN, title: 'A2', price: '55.50' },
+      ],
+    });
+    return client;
+  }
+
+  it("shows the catalogue's product, handle, variant title, price and image in the cart view", async () => {
+    const client = seededClient();
+    const { session } = memorySession();
+
+    const res = await handleAdd(postForm({ merchandiseId: MOON, quantity: '2' }, { json: true }), client, session);
+    expect(res.status).toBe(200);
+
+    const view = await (await handleView(client, session)).json();
+    expect(view).toMatchObject({
+      subtotal: { amount: '70.00', currencyCode: 'GBP' },
+      lines: [
+        {
+          quantity: 2,
+          productTitle: 'Moon print',
+          productHandle: 'moon-print',
+          variantTitle: 'A3',
+          unitPrice: { amount: '35.00' },
+          lineTotal: { amount: '70.00' },
+          image: { url: 'https://cdn.example.com/moon.jpg', altText: 'A full moon' },
+        },
+      ],
+    });
+  });
+
+  it('answers the same lines from an add with X-Cart-View, and keeps the other variant apart', async () => {
+    const client = seededClient();
+    const { session } = memorySession();
+    await handleAdd(postForm({ merchandiseId: MOON, quantity: '1' }, { json: true }), client, session);
+
+    const request = postForm({ merchandiseId: SUN, quantity: '1' }, { json: true });
+    request.headers.set('x-cart-view', '1');
+    const view = await (await handleAdd(request, client, session)).json();
+
+    expect(view.lines.map((line: { productTitle: string; variantTitle: string }) => [line.productTitle, line.variantTitle])).toEqual([
+      ['Moon print', 'A3'],
+      ['Moon print', 'A2'],
+    ]);
+    expect(view.subtotal.amount).toBe('90.50');
+  });
+
+  it('keeps an explicit price for a seeded variant ahead of the catalogue price', async () => {
+    const client = createFakeCartClient({ prices: { [MOON]: '12.00' } });
+    client.seedProduct({ id: '2001', handle: 'moon-print', title: 'Moon print', variants: [{ id: MOON, price: '35.00' }] });
+    const { session } = memorySession();
+    await handleAdd(postForm({ merchandiseId: MOON, quantity: '1' }, { json: true }), client, session);
+
+    const view = await (await handleView(client, session)).json();
+    expect(view.lines[0]).toMatchObject({ productTitle: 'Moon print', unitPrice: { amount: '12.00' } });
+  });
+
+  it('keeps the stub for a variant that is not in the catalogue, or whose product was removed', async () => {
+    const client = seededClient();
+    const { session } = memorySession();
+    await handleAdd(postForm({ merchandiseId: VARIANT, quantity: '1' }, { json: true }), client, session);
+    expect(await (await handleView(client, session)).json()).toMatchObject({
+      lines: [{ productTitle: 'Fake product', productHandle: 'fake-product', variantTitle: 'Default Title', unitPrice: { amount: '10.00' }, image: null }],
+    });
+
+    const removed = seededClient();
+    const removedSession = memorySession().session;
+    await handleAdd(postForm({ merchandiseId: MOON, quantity: '1' }, { json: true }), removed, removedSession);
+    removed.removeProduct('2001');
+    expect(await (await handleView(removed, removedSession)).json()).toMatchObject({
+      lines: [{ productTitle: 'Fake product' }],
+    });
+  });
+
+  it('gives a product with no image a null image', async () => {
+    const client = createFakeCartClient();
+    client.seedProduct({ id: '2002', handle: 'sun-print', title: 'Sun print', variants: [{ id: SUN }] });
+    const { session } = memorySession();
+    await handleAdd(postForm({ merchandiseId: SUN, quantity: '1' }, { json: true }), client, session);
+
+    expect(await (await handleView(client, session)).json()).toMatchObject({
+      lines: [{ productTitle: 'Sun print', productHandle: 'sun-print', variantTitle: 'Default Title', unitPrice: { amount: '10.00' }, image: null }],
+    });
+  });
+});

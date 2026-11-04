@@ -15,7 +15,7 @@ interface Props {
 const { cart, shippingNote = DEFAULT_SHIPPING_NOTE, continueHref = '/', class: className = '' } = Astro.props;
 ---
 
-<section aria-labelledby="cart-summary-title" class:list={['space-y-4', className]}>
+<section aria-labelledby="cart-summary-title" class:list={['[--spacing:0.25rem] space-y-4', className]}>
   <h2 id="cart-summary-title" class="sr-only">Order summary</h2>
   <dl class="space-y-2">
     <div class="flex justify-between gap-4 text-lg font-bold">
