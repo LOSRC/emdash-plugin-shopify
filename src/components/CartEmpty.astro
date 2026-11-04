@@ -1,0 +1,19 @@
+---
+interface Props {
+  /** Where "Start shopping" goes. */
+  href?: string;
+  class?: string;
+}
+
+const { href = '/', class: className = '' } = Astro.props;
+---
+
+<div class:list={['mx-auto max-w-prose space-y-6 py-12 text-center', className]}>
+  <h2 class="text-2xl font-bold">Your shopping cart is empty</h2>
+  <a
+    href={href}
+    class="inline-block bg-stone-900 px-6 py-3 font-bold tracking-wide text-white uppercase hover:bg-stone-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-900"
+  >
+    Start shopping
+  </a>
+</div>

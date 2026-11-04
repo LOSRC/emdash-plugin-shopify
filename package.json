@@ -31,10 +31,16 @@
       "types": "./dist/core/testing.d.ts",
       "default": "./dist/core/testing.js"
     },
+    "./elements/*": {
+      "types": "./dist/elements/*.d.ts",
+      "default": "./dist/elements/*.js"
+    },
+    "./components/*": "./src/components/*",
     "./package.json": "./package.json"
   },
   "files": [
     "dist",
+    "src/components",
     "README.md",
     "CHANGELOG.md",
     "LICENSE"

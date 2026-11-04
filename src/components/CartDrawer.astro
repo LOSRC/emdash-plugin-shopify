@@ -1,0 +1,145 @@
+---
+/**
+ * The slide-out cart. Render it once, in the site layout, and import nothing else: the component
+ * brings its own `<cart-drawer>` element script. Without JavaScript it stays hidden and add-to-cart
+ * forms post and land on /cart/.
+ *
+ * It enhances any `<form method="post" action="{apiBase}/add">` on the page, and opens from any
+ * element with a `data-cart-drawer-open` attribute (for example `<CartCount openDrawer />`).
+ * Do not render it on the /cart/ page itself.
+ */
+interface Props {
+  /** Where the site mounts the cart routes (add, update, remove, view). */
+  apiBase?: string;
+  /** The cart page, linked from the drawer's footer. */
+  cartPath?: string;
+  /** Product page path for a line's title; `{handle}` is replaced. */
+  productPath?: string;
+  /** The free-shipping line. */
+  shippingNote?: string;
+  /** Heading shown at the top of the drawer. */
+  title?: string;
+  /** Classes added to the dialog panel, after the defaults. */
+  class?: string;
+}
+
+const {
+  apiBase = '/api/cart',
+  cartPath = '/cart/',
+  productPath = '/product/{handle}',
+  shippingNote = 'Free shipping (UK)',
+  title = 'Your cart',
+  class: className = '',
+} = Astro.props;
+
+const base = apiBase.replace(/\/$/, '');
+---
+
+<cart-drawer
+  add-url={`${base}/add`}
+  update-url={`${base}/update`}
+  remove-url={`${base}/remove`}
+  view-url={`${base}/view`}
+  product-path={productPath}
+>
+  <dialog
+    aria-labelledby="cart-drawer-title"
+    data-open="false"
+    class:list={[
+      'group/drawer fixed inset-y-0 right-0 left-auto m-0 h-dvh max-h-none w-full max-w-md bg-white p-0 text-stone-900 shadow-2xl',
+      'translate-x-full transition-transform duration-300 ease-out motion-reduce:transition-none data-[open=true]:translate-x-0',
+      'backdrop:bg-stone-900/40',
+      className,
+    ]}
+  >
+    <div class="flex h-full flex-col">
+      <header class="flex items-center justify-between border-b-2 border-stone-900 px-6 py-4">
+        <h2 id="cart-drawer-title" class="text-xl font-bold">{title}</h2>
+        <button
+          type="button"
+          data-close
+          autofocus
+          aria-label="Close cart"
+          class="-mr-2 inline-flex size-10 items-center justify-center rounded-full hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-900"
+        >
+          <svg aria-hidden="true" viewBox="0 0 24 24" class="size-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M6 6l12 12M18 6L6 18"></path>
+          </svg>
+        </button>
+      </header>
+
+      <p data-error role="alert" hidden class="border-b border-red-300 bg-red-50 px-6 py-3 text-sm text-red-900"></p>
+
+      <div data-body class="flex-1 overflow-y-auto px-6 transition-opacity group-data-[busy=true]/drawer:opacity-60">
+        <p data-loading hidden class="py-6 text-stone-600">Updating your cart&hellip;</p>
+        <p data-empty hidden class="py-6 text-stone-600">Your cart is empty.</p>
+        <ul data-lines hidden class="divide-y divide-stone-300"></ul>
+      </div>
+
+      <footer data-footer hidden class="space-y-4 border-t-2 border-stone-900 px-6 py-5">
+        <dl class="space-y-2">
+          <div class="flex justify-between gap-4 font-bold">
+            <dt>Subtotal</dt>
+            <dd data-subtotal></dd>
+          </div>
+          <div class="flex justify-between gap-4 text-sm">
+            <dt>Shipping</dt>
+            <dd data-shipping>{shippingNote}</dd>
+          </div>
+        </dl>
+        <a
+          data-checkout
+          href={cartPath}
+          class="block bg-stone-900 px-6 py-3 text-center font-bold tracking-wide text-white uppercase hover:bg-stone-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-900"
+        >
+          Checkout
+        </a>
+        <a href={cartPath} class="block text-center underline hover:no-underline">View cart</a>
+      </footer>
+
+      <p data-live role="status" aria-live="polite" class="sr-only"></p>
+    </div>
+  </dialog>
+
+  <template data-line>
+    <li class="flex gap-4 py-4">
+      <img data-image alt="" width="64" height="64" loading="lazy" class="size-16 shrink-0 object-cover" />
+      <div class="flex min-w-0 flex-1 flex-col gap-1">
+        <a data-title class="font-bold underline hover:no-underline"></a>
+        <p data-variant class="text-sm text-stone-600"></p>
+        <p data-price class="text-sm"></p>
+        <div class="mt-1 flex items-center gap-1">
+          <button
+            type="button"
+            data-decrease
+            class="inline-flex size-8 items-center justify-center border-2 border-stone-900 hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-900"
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24" class="size-4" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14"></path></svg>
+          </button>
+          <output data-quantity class="inline-block min-w-8 text-center font-bold tabular-nums"></output>
+          <button
+            type="button"
+            data-increase
+            class="inline-flex size-8 items-center justify-center border-2 border-stone-900 hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-900"
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24" class="size-4" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg>
+          </button>
+        </div>
+      </div>
+      <div class="flex flex-col items-end justify-between">
+        <p data-total class="font-bold tabular-nums"></p>
+        <button
+          type="button"
+          data-remove
+          class="text-sm underline hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-900"
+        >
+          Remove
+        </button>
+      </div>
+    </li>
+  </template>
+</cart-drawer>
+
+<script>
+  import '@losrc/emdash-plugin-shopify/elements/cart-drawer';
+</script>
