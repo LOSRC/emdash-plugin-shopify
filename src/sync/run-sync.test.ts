@@ -3,6 +3,8 @@ import { createFakeCartClient } from '../core/testing';
 import { SHOP_DATA_CACHE_TAG } from '../core/cache-tag';
 import { runSync } from './run-sync';
 import { createMemoryContentStore } from './memory-store';
+import type { MemoryContentStore } from './memory-store';
+import type { LinkedEntry } from './types';
 
 function setup() {
   const shopify = createFakeCartClient();
@@ -36,6 +38,65 @@ describe('runSync: new products', () => {
       warnings: [],
     });
     expect(purges).toEqual([[SHOP_DATA_CACHE_TAG]]);
+  });
+});
+
+/**
+ * A store over `store` that, on its `nth` listing, lets `entry` appear straight after the list is
+ * taken: another run (or an editor) got there first, in the gap before the next write.
+ */
+function entryAppearsAfterListing(store: MemoryContentStore, nth: number, entry: LinkedEntry): MemoryContentStore {
+  let listings = 0;
+  return {
+    ...store,
+    async listLinked() {
+      const rows = await store.listLinked();
+      listings += 1;
+      if (listings === nth) store.seed(entry);
+      return rows;
+    },
+    createDraft: (draft) => store.createDraft(draft),
+  };
+}
+
+describe('runSync: another run got there first', () => {
+  it('makes no second draft for a product whose entry appeared after the run listed the store', async () => {
+    const { shopify, store, purge } = setup();
+    shopify.seedProduct({ id: '101', handle: 'blue-mug', title: 'Blue Mug' });
+    const racing = entryAppearsAfterListing(store, 1, { entryId: 'theirs', shopifyId: '101', slug: 'blue-mug', title: 'Blue Mug' });
+
+    const report = await runSync({ shopify, store: racing, purge });
+
+    expect(store.createCalls).toBe(0);
+    expect(store.entries()).toHaveLength(1);
+    expect(report.created).toEqual([]);
+    expect(report.unchanged).toBe(1);
+    expect(report.warnings).toEqual([
+      'An entry for Shopify product 101 ("blue-mug") appeared while the sync was running, so no draft was made. Was another sync running?',
+    ]);
+  });
+
+  it('checks again before every draft, not only the first', async () => {
+    const { shopify, store, purge } = setup();
+    shopify.seedProduct({ id: '101', handle: 'blue-mug', title: 'Blue Mug' });
+    shopify.seedProduct({ id: '102', handle: 'red-mug', title: 'Red Mug' });
+    // Listing 1 is the run's own; listing 2 is the check before the first draft; the entry for 102 appears after that.
+    const racing = entryAppearsAfterListing(store, 2, { entryId: 'theirs', shopifyId: '102', slug: 'red-mug', title: 'Red Mug' });
+
+    const report = await runSync({ shopify, store: racing, purge });
+
+    expect(report.created.map((entry) => entry.shopifyId)).toEqual(['101']);
+    expect(store.entries().map((entry) => entry.shopifyId).sort()).toEqual(['101', '102']);
+  });
+
+  it('matches the appeared entry by product id however it is stored (a GID counts)', async () => {
+    const { shopify, store, purge } = setup();
+    shopify.seedProduct({ id: '101', handle: 'blue-mug', title: 'Blue Mug' });
+    const racing = entryAppearsAfterListing(store, 1, { entryId: 'theirs', shopifyId: 'gid://shopify/Product/101', slug: 'blue-mug', title: 'Blue Mug' });
+
+    await runSync({ shopify, store: racing, purge });
+
+    expect(store.createCalls).toBe(0);
   });
 });
 

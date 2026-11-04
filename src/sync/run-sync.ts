@@ -20,6 +20,12 @@ export class SyncRefusedError extends Error {
   override readonly name = 'SyncRefusedError';
 }
 
+/** The product id an entry's stored value stands for: numeric, or a product GID; anything else stays as written (trimmed). */
+function linkedProductId(entry: LinkedEntry): string {
+  const stored = entry.shopifyId.trim();
+  return productIdOf(stored) ?? stored;
+}
+
 function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -28,6 +34,10 @@ function message(error: unknown): string {
  * One sync run. It links Shopify's channel products to content entries by Shopify product ID:
  * it makes a draft for each product with no entry, reports (never writes) entries whose product
  * the channel no longer returns, and leaves every other entry alone. It never updates or deletes.
+ *
+ * Just before each draft it lists the store again, so an entry that appeared since the run started
+ * (another run, an editor) is not duplicated. That narrows the window rather than closing it: the
+ * plugin's run lock is what keeps two runs apart.
  *
  * Shopify and the store are read before anything is written: if either rejects, or Shopify returns
  * an empty channel while entries are linked (a bad token looks like that), the run rejects before any
@@ -50,8 +60,7 @@ export async function runSync(deps: SyncDeps): Promise<SyncReport> {
   const entriesById = new Map<string, LinkedEntry[]>();
   for (const entry of linked) {
     // A stored id is numeric or a product GID; anything else stays as written (trimmed) and so is flagged.
-    const stored = entry.shopifyId.trim();
-    const id = productIdOf(stored) ?? stored;
+    const id = linkedProductId(entry);
     entriesById.set(id, [...(entriesById.get(id) ?? []), entry]);
   }
 
@@ -72,6 +81,17 @@ export async function runSync(deps: SyncDeps): Promise<SyncReport> {
   for (const product of channel) {
     if (entriesById.has(product.id)) continue;
     try {
+      // Look again just before writing: an entry may have appeared since the listing above (a second
+      // run, an editor). The run lock in the plugin is what stops two runs; this is the backstop. It
+      // costs one more listing per draft made, and nothing when there is nothing to make.
+      const appeared = (await store.listLinked()).find((entry) => linkedProductId(entry) === product.id);
+      if (appeared) {
+        report.unchanged += 1;
+        report.warnings.push(
+          `An entry for Shopify product ${product.id} ("${product.handle}") appeared while the sync was running, so no draft was made. Was another sync running?`,
+        );
+        continue;
+      }
       const draft = await store.createDraft({ shopifyId: product.id, handle: product.handle, title: product.title });
       report.created.push({
         entryId: draft.entryId,
