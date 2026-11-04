@@ -180,7 +180,7 @@ describe('Storefront cart client', () => {
     const { fetch } = stubFetch({ json: { data: { cartCreate: { cart: cartFixture, userErrors: [] } } } });
     const client = createStorefrontCartClient({ shop: SHOP, token: 't', fetch });
     let stored: StoredCart | undefined;
-    const session: CartSession = { read: async () => stored, write: (cart) => (stored = cart) };
+    const session: CartSession = { read: async () => stored, write: (cart) => (stored = cart), clear: () => (stored = undefined) };
     const form = new FormData();
     form.append('merchandiseId', VARIANT);
 

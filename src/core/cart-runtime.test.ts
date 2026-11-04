@@ -32,6 +32,9 @@ function memorySession(initial?: StoredCart) {
       state.current = cart;
       state.writes += 1;
     },
+    clear: () => {
+      state.current = undefined;
+    },
   };
   return { session, state };
 }
@@ -576,6 +579,50 @@ describe('handleView (GET the cart view)', () => {
     expect(res.status).toBe(502);
     expect(await res.json()).toEqual({ error: CART_ERROR_MESSAGE });
     expect(res.headers.get('cache-control')).toBe('private, no-store');
+  });
+});
+
+describe('a stored cart Shopify no longer resolves is forgotten, so the header count follows', () => {
+  const stale = (): StoredCart => ({
+    id: 'gid://shopify/Cart/expired-xyz',
+    snapshot: { lineCount: 3, subtotal: '30.00', currency: 'GBP' },
+  });
+  const summaryOf = async (session: CartSession) => (await handleSummary(session)).json();
+
+  it('handleView answers an empty view, then the summary is zero', async () => {
+    const { session, state } = memorySession(stale());
+    await handleView(createFakeCartClient(), session);
+    expect(await summaryOf(session)).toEqual({ lineCount: 0 });
+    expect(state.current).toBeUndefined();
+  });
+
+  it('a JSON update answers an empty view, then the summary is zero', async () => {
+    const { session } = memorySession(stale());
+    await handleUpdate(viewRequest({ lineId: 'gid://shopify/CartLine/x', quantity: '2' }), createFakeCartClient(), session);
+    expect(await summaryOf(session)).toEqual({ lineCount: 0 });
+  });
+
+  it('a JSON remove answers an empty view, then the summary is zero', async () => {
+    const { session } = memorySession(stale());
+    await handleRemove(viewRequest({ lineId: 'gid://shopify/CartLine/x' }), createFakeCartClient(), session);
+    expect(await summaryOf(session)).toEqual({ lineCount: 0 });
+  });
+
+  it('a no-JS update and remove forget it too', async () => {
+    for (const handle of [handleUpdate, handleRemove]) {
+      const { session } = memorySession(stale());
+      const res = await handle(postForm({ lineId: 'gid://shopify/CartLine/x', quantity: '2' }), createFakeCartClient(), session);
+      expect(res.status).toBe(303);
+      expect(await summaryOf(session)).toEqual({ lineCount: 0 });
+    }
+  });
+
+  it('keeps the stored cart when Shopify fails, since nothing is known about it', async () => {
+    const client = createFakeCartClient();
+    client.failNextWith(new Error('boom'));
+    const { session, state } = memorySession(stale());
+    await handleView(client, session);
+    expect(state.current).toEqual(stale());
   });
 });
 

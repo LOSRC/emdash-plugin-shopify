@@ -22,6 +22,10 @@ function fakeAstroSession() {
       keys.push(key);
       data.set(key, value);
     },
+    delete: (key: 'cart') => {
+      keys.push(key);
+      data.delete(key);
+    },
   };
 }
 
@@ -37,9 +41,17 @@ describe('astroCartSession', () => {
     expect(new Set(astro.keys)).toEqual(new Set(['cart']));
   });
 
+  it('forgets the stored cart on clear', async () => {
+    const session = astroCartSession(fakeAstroSession());
+    session.write(STORED);
+    session.clear();
+    expect(await session.read()).toBeUndefined();
+  });
+
   it('is inert when the site has no session: reads are empty and writes are no-ops', async () => {
     const session = astroCartSession(undefined);
     session.write(STORED);
+    session.clear();
     expect(await session.read()).toBeUndefined();
   });
 

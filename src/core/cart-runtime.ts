@@ -159,6 +159,7 @@ async function handleLineMutation<T>(
   }
   // A null cart is either a refusal (userErrors) or a cart Shopify no longer resolves (stale).
   if (json && result.userErrors.length > 0) return jsonResponse({ error: CART_UPDATE_REJECTED_MESSAGE }, 422);
+  session.clear();
   return json ? privateJson(emptyCartView(stored.snapshot.currency)) : redirectToCart();
 }
 
@@ -220,5 +221,10 @@ export async function handleView(client: ShopifyCartClient, session: CartSession
   } catch {
     return privateJson({ error: CART_ERROR_MESSAGE }, 502);
   }
-  return privateJson(cart ? toCartView(cart) : emptyCartView(stored.snapshot.currency));
+  if (!cart) {
+    // Shopify no longer has it: forget it, so the header count stops showing the old lines.
+    session.clear();
+    return privateJson(emptyCartView(stored.snapshot.currency));
+  }
+  return privateJson(toCartView(cart));
 }

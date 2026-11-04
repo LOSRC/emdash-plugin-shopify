@@ -15,7 +15,14 @@ const VARIANT = 'gid://shopify/ProductVariant/10000000001';
 
 function memorySession(): { session: CartSession; state: { current?: StoredCart } } {
   const state: { current?: StoredCart } = {};
-  return { session: { read: async () => state.current, write: (cart) => (state.current = cart) }, state };
+  return {
+    session: {
+      read: async () => state.current,
+      write: (cart) => (state.current = cart),
+      clear: () => (state.current = undefined),
+    },
+    state,
+  };
 }
 
 /** A `fetch` that hands each request to the real handlers, as the site's routes do. */

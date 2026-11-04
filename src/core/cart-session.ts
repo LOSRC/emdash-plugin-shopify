@@ -15,22 +15,27 @@ export interface StoredCart {
   snapshot: CartSnapshot;
 }
 
-/** The read/write seam the cart runtime uses. `read` resolves `undefined` when there is no cart (or no session). */
+/**
+ * The read/write seam the cart runtime uses. `read` resolves `undefined` when there is no cart (or no
+ * session). `clear` forgets the stored cart, which the runtime does when Shopify no longer resolves it.
+ */
 export interface CartSession {
   read(): Promise<StoredCart | undefined>;
   write(cart: StoredCart): void;
+  clear(): void;
 }
 
 /** The slice of the Astro session this seam uses: structural, so core imports no Astro types. */
 export interface AstroSessionLike {
   get(key: 'cart'): Promise<unknown>;
   set(key: 'cart', value: StoredCart): void;
+  delete(key: 'cart'): void;
 }
 
 /**
  * Wrap the Astro session (`context.session` / `Astro.session`) as a `CartSession`. The session is
  * `undefined` when the site has no session driver (plain `astro dev`); reads then resolve
- * `undefined` and writes are no-ops.
+ * `undefined` and writes and clears are no-ops.
  */
 export function astroCartSession(session: AstroSessionLike | undefined): CartSession {
   return {
@@ -39,6 +44,9 @@ export function astroCartSession(session: AstroSessionLike | undefined): CartSes
     },
     write(cart) {
       session?.set('cart', cart);
+    },
+    clear() {
+      session?.delete('cart');
     },
   };
 }
