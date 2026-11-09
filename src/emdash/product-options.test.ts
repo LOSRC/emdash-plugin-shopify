@@ -86,4 +86,115 @@ describe('createProductOptionsRefresher', () => {
     const heading = createProductOptionsRefresher({ registry: async () => registry, blockType: 'product_grid', field: 'heading' });
     await expect(heading(['a'])).rejects.toThrow('has no select or multiSelect field "heading"');
   });
+
+  it('extends the select sub-field of a repeater, keeping its other sub-fields and validation', async () => {
+    const grid: BlockTypeLike = {
+      slug: 'product_grid',
+      currentVersion: 2,
+      versions: [
+        { version: 1, fingerprint: 'fp-1', fields: [] },
+        {
+          version: 2,
+          fingerprint: 'fp-2',
+          fields: [
+            { slug: 'title', label: 'Title', type: 'string' },
+            {
+              slug: 'products',
+              label: 'Products',
+              type: 'repeater',
+              validation: {
+                maxItems: 100,
+                subFields: [
+                  { slug: 'product', label: 'Product', type: 'select', required: true, options: ['blue-mug'] },
+                  { slug: 'note', label: 'Note', type: 'string' },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    };
+    const { registry, updates } = fakeRegistry(grid);
+    const refresh = createProductOptionsRefresher({ registry: async () => registry, blockType: 'product_grid', field: 'products' });
+
+    await refresh(['blue-mug', 'red-mug']);
+
+    expect(updates).toHaveLength(1);
+    expect(updates[0]?.input.expectedFingerprint).toBe('fp-2');
+    expect(updates[0]?.input.breaking).toBeUndefined();
+    expect(updates[0]?.input.fields).toEqual([
+      { slug: 'title', label: 'Title', type: 'string' },
+      {
+        slug: 'products',
+        label: 'Products',
+        type: 'repeater',
+        validation: {
+          maxItems: 100,
+          subFields: [
+            { slug: 'product', label: 'Product', type: 'select', required: true, options: ['blue-mug', 'red-mug'] },
+            { slug: 'note', label: 'Note', type: 'string' },
+          ],
+        },
+      },
+    ]);
+  });
+
+  it('reads the active version, so the same config follows a field moved from multiSelect to repeater', async () => {
+    const grid: BlockTypeLike = {
+      slug: 'product_grid',
+      currentVersion: 1,
+      versions: [
+        {
+          version: 1,
+          fingerprint: 'fp-1',
+          fields: [{ slug: 'products', label: 'Products', type: 'multiSelect', validation: { options: ['a'] } }],
+        },
+        {
+          version: 2,
+          fingerprint: 'fp-2',
+          fields: [
+            {
+              slug: 'products',
+              label: 'Products',
+              type: 'repeater',
+              validation: { subFields: [{ slug: 'product', label: 'Product', type: 'select', options: ['a'] }] },
+            },
+          ],
+        },
+      ],
+    };
+    const { registry, updates } = fakeRegistry(grid);
+    const refresh = createProductOptionsRefresher({ registry: async () => registry, blockType: 'product_grid', field: 'products' });
+
+    await refresh(['b']);
+    expect(updates[0]?.input.expectedFingerprint).toBe('fp-1');
+    expect(updates[0]?.input.fields[0]?.validation?.options).toEqual(['a', 'b']);
+
+    grid.currentVersion = 2;
+    await refresh(['b']);
+    expect(updates[1]?.input.expectedFingerprint).toBe('fp-2');
+    expect(updates[1]?.input.fields[0]?.validation?.subFields?.[0]?.options).toEqual(['a', 'b']);
+  });
+
+  it('refuses a repeater without exactly one select sub-field', async () => {
+    const repeater = (subFields: { slug: string; label: string; type: string; options?: string[] }[]): BlockTypeLike => ({
+      slug: 'product_grid',
+      currentVersion: 1,
+      versions: [
+        { version: 1, fingerprint: 'fp-1', fields: [{ slug: 'products', label: 'Products', type: 'repeater', validation: { subFields } }] },
+      ],
+    });
+    const none = fakeRegistry(repeater([{ slug: 'note', label: 'Note', type: 'string' }]));
+    const two = fakeRegistry(
+      repeater([
+        { slug: 'product', label: 'Product', type: 'select', options: ['a'] },
+        { slug: 'other', label: 'Other', type: 'select', options: ['a'] },
+      ]),
+    );
+    for (const { registry, updates } of [none, two]) {
+      const refresh = createProductOptionsRefresher({ registry: async () => registry, blockType: 'product_grid', field: 'products' });
+      await expect(refresh(['b'])).rejects.toThrow('nor a repeater "products" with one select sub-field');
+      expect(updates).toEqual([]);
+    }
+  });
 });

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Product picker: `productOptions.field` may also name a `repeater` whose one `select` sub-field holds a product per row, which lets an editor drag the products into order. The refresher reads the field's type from the block type's active version on every run, so a site that moves the field from a `multiSelect` to a repeater in a new block type version keeps the same `productOptions`, and Sync works before and after the new version is activated. Adding a sub-field option is a compatible change in EmDash, so this still needs no new version. A repeater with no `select` sub-field, or more than one, is refused.
+
 ## 0.4.0
 
 - The cart components no longer depend on the site's spacing scale: each component's root sets `--spacing: 0.25rem`, so a site with `--spacing: 0.0625rem` (pixel-keyed) gets the same padding, gaps and sizes as one on Tailwind's default. A site that worked around it with `cart-drawer, .shop-cart { --spacing: 0.25rem }` can delete the rule. The README now says what a site's theme does change (colours, fonts, type sizes, shadows, breakpoints) and what it does not (spacing).
