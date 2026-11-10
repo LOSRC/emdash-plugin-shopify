@@ -1,5 +1,5 @@
 import { cartRoutes } from '../core/cart-defaults';
-import { CART_CHANGE_EVENT, fetchLineCount } from './cart-client';
+import { CART_CHANGE_EVENT, fetchLineCount, showCount } from './cart-client';
 import type { CartChangeDetail } from './cart-client';
 
 /**
@@ -8,7 +8,7 @@ import type { CartChangeDetail } from './cart-client';
  * from the back/forward cache) and follows `<cart-drawer>` through the `shopify-cart:change` event.
  *
  * Markup it expects (rendered by `CartCount.astro`): a `[data-count]` badge, hidden while the count is
- * zero, and a `[data-label]` visually-hidden label, whose text is kept as the base for "Cart, 3 items".
+ * zero (and kept from screen readers while it shows, see `showCount`), and a `[data-label]` visually-hidden label, whose text is kept as the base for "Cart, 3 items".
  *
  * Attribute: `src`, the summary route (default: the summary route under `/api/cart`).
  */
@@ -42,10 +42,7 @@ export class CartCountElement extends HTMLElement {
 
   #show(count: number): void {
     const badge = this.querySelector<HTMLElement>('[data-count]');
-    if (badge) {
-      badge.textContent = String(count);
-      badge.hidden = count === 0;
-    }
+    if (badge) showCount(badge, count);
     const label = this.querySelector('[data-label]');
     if (label) label.textContent = count === 0 ? this.#label : `${this.#label}, ${count} ${count === 1 ? 'item' : 'items'}`;
   }

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { cartActionOf, fetchLineCount, requestCartView, GENERIC_ERROR } from './cart-client';
-import type { FetchLike } from './cart-client';
+import { cartActionOf, fetchLineCount, requestCartView, showCount, GENERIC_ERROR } from './cart-client';
+import type { CountBadge, FetchLike } from './cart-client';
 import { handleAdd, handleRemove, CART_REJECTED_MESSAGE } from '../core/cart-runtime';
 import type { CartSession, StoredCart } from '../core/cart-session';
 import { createFakeCartClient } from '../core/testing';
@@ -123,5 +123,38 @@ describe('cartActionOf', () => {
     expect(cartActionOf('/api/cart/summary', urls, page)).toBeNull();
     expect(cartActionOf('/somewhere/else', urls, page)).toBeNull();
     expect(cartActionOf('https://evil.example.org/api/cart/add', urls, page)).toBeNull();
+  });
+});
+
+describe('showCount', () => {
+  /** A badge as `CartCount.astro` serves it: hidden, with no `aria-hidden`. */
+  function badge(): CountBadge & { attributes: Record<string, string> } {
+    const attributes: Record<string, string> = {};
+    return {
+      textContent: '0',
+      hidden: true,
+      attributes,
+      setAttribute: (name, value) => void (attributes[name] = value),
+      removeAttribute: (name) => void delete attributes[name],
+    };
+  }
+
+  it('shows a count, kept from screen readers because the label says it', () => {
+    const element = badge();
+    showCount(element, 3);
+
+    expect(element.textContent).toBe('3');
+    expect(element.hidden).toBe(false);
+    expect(element.attributes['aria-hidden']).toBe('true');
+  });
+
+  it('hides an empty cart, with no aria-hidden beside hidden', () => {
+    const element = badge();
+    showCount(element, 2);
+    showCount(element, 0);
+
+    expect(element.textContent).toBe('0');
+    expect(element.hidden).toBe(true);
+    expect(element.attributes).toEqual({});
   });
 });

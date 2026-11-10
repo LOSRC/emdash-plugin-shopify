@@ -89,6 +89,29 @@ export function cartActionOf(formAction: string, urls: Record<CartAction, string
 }
 
 /** The document event both elements use to stay in step: `detail.lineCount` is the new item count. */
+/** What `showCount` writes to: the `[data-count]` badge, or a stand-in for it in a test. */
+export interface CountBadge {
+  textContent: string | null;
+  /** `HTMLElement.hidden` is also `'until-found'`; this only ever writes a boolean. */
+  hidden: boolean | string;
+  setAttribute(name: string, value: string): void;
+  removeAttribute(name: string): void;
+}
+
+/**
+ * Puts the count in the header's badge: hidden while it is zero, shown otherwise. A shown badge is
+ * `aria-hidden`, because the link's label already says the count ("Cart, 3 items") and a screen
+ * reader would otherwise read the number twice. The attribute is set here and not in the markup:
+ * the badge is served `hidden`, and `aria-hidden` on a `hidden` element is redundant (the Nu HTML
+ * Checker warns about it).
+ */
+export function showCount(badge: CountBadge, count: number): void {
+  badge.textContent = String(count);
+  badge.hidden = count === 0;
+  if (count === 0) badge.removeAttribute('aria-hidden');
+  else badge.setAttribute('aria-hidden', 'true');
+}
+
 export const CART_CHANGE_EVENT = 'shopify-cart:change';
 
 export interface CartChangeDetail {

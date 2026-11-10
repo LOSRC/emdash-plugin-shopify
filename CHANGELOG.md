@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `CartCount`: the count's badge is served `hidden` without `aria-hidden`, which the Nu HTML Checker warned was redundant on every page. `<cart-count>` sets `aria-hidden` when it shows the number (`showCount`, exported from the cart client), so a screen reader still hears the count once, from the link's label. A site that wrote the badge's markup by hand needs no change.
 - Product picker: `productOptions.field` may also name a `repeater` whose one `select` sub-field holds a product per row, which lets an editor drag the products into order. The refresher reads the field's type from the block type's active version on every run, so a site that moves the field from a `multiSelect` to a repeater in a new block type version keeps the same `productOptions`, and Sync works before and after the new version is activated. Adding a sub-field option is a compatible change in EmDash, so this still needs no new version. A repeater with no `select` sub-field, or more than one, is refused.
 
 ## 0.4.0
