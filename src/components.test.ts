@@ -113,6 +113,8 @@ describe('CartCount', () => {
     expect(html).toContain('href="/cart/"');
     expect(html).toContain('<cart-count src="/api/cart/summary"');
     expect(html).toMatch(/data-count[^>]*hidden/);
+    // `aria-hidden` beside `hidden` is redundant; the element sets it when it shows the count.
+    expect(html).not.toMatch(/data-count[^>]*aria-hidden/);
     expect(html).not.toContain('data-cart-drawer-open');
   });
 
